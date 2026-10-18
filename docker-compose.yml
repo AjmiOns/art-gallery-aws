@@ -1,0 +1,22 @@
+# PostgreSQL local pour le développement (la prod utilise Amazon RDS)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: art-gallery-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-gallery}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gallery}
+      POSTGRES_DB: ${DB_NAME:-art_gallery}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gallery} -d ${DB_NAME:-art_gallery}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

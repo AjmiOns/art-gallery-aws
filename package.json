@@ -1,0 +1,15 @@
+{
+  "name": "art-gallery-aws",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "db": "docker compose up -d",
+    "dev": "concurrently -k -n api,web -c blue,green \"npm run start:dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "start": "npm run db && npm run dev",
+    "seed": "python scripts/seed_artworks.py"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
