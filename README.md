@@ -1,5 +1,8 @@
 # Online Art Gallery - AWS Infrastructure (Terraform)
 
+![Terraform](https://img.shields.io/badge/Terraform-planned-7B42BC?logo=terraform&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
+
 Infrastructure as Code for the **Online Art Gallery** project (exhibition and sale of artworks online), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
 
 - Application stack: PERN (PostgreSQL on Amazon RDS, Express, React, Node.js)
