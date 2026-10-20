@@ -18,4 +18,3 @@ crash.log
 next-env.d.ts
 *.tsbuildinfo
 !.env.local.example
-labsuser.pem
