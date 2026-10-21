@@ -1,23 +1,24 @@
 'use client';
 
-import { CATEGORIES, CategoryId } from '@/lib/categories';
 import { CURRENCY } from '@/lib/api';
+import { useCategories } from './CategoriesProvider';
 
 export const MAX_PRICE = 1000;
 export type SortKey = 'new' | 'asc' | 'desc';
 
 type Props = {
   q: string;
-  tag: CategoryId | '';
+  tag: string;
   maxPrice: number;
   sort: SortKey;
   onQ: (v: string) => void;
-  onTag: (v: CategoryId | '') => void;
+  onTag: (v: string) => void;
   onMaxPrice: (v: number) => void;
   onSort: (v: SortKey) => void;
 };
 
 export default function FilterBar({ q, tag, maxPrice, sort, onQ, onTag, onMaxPrice, onSort }: Props) {
+  const { categories } = useCategories();
   return (
     <div className="filters" id="collections">
       <div className="filters__inner">
@@ -31,14 +32,14 @@ export default function FilterBar({ q, tag, maxPrice, sort, onQ, onTag, onMaxPri
           <button type="button" className={`chip${tag === '' ? ' is-active' : ''}`} aria-pressed={tag === ''} onClick={() => onTag('')}>
             Toutes
           </button>
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
-              key={c.id}
+              key={c.slug}
               type="button"
-              data-cat={c.slug}
-              className={`chip chip--cat${tag === c.id ? ' is-active' : ''}`}
-              aria-pressed={tag === c.id}
-              onClick={() => onTag(tag === c.id ? '' : c.id)}
+              data-tone={c.tone}
+              className={`chip chip--cat${tag === c.slug ? ' is-active' : ''}`}
+              aria-pressed={tag === c.slug}
+              onClick={() => onTag(tag === c.slug ? '' : c.slug)}
             >
               {c.label}
             </button>

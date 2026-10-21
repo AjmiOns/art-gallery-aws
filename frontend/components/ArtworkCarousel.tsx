@@ -39,7 +39,7 @@ export default function ArtworkCarousel({ category, items, onOpen, onSeeAll, asG
     track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.85, behavior: 'smooth' });
 
   return (
-    <section className="shelf" data-cat={category.slug} aria-labelledby={`shelf-${category.slug}`}>
+    <section className="shelf" data-tone={category.tone} aria-labelledby={`shelf-${category.slug}`}>
       <header className="shelf__head">
         <div>
           <h2 id={`shelf-${category.slug}`}>
