@@ -1,16 +1,21 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { Session } from '@/lib/api';
+import type { Session, SessionUser } from '@/lib/api';
 
 type AuthState = {
   session: Session | null;
+  user: SessionUser | null;
+  token: string | null;
   ready: boolean;
   signIn: (s: Session) => void;
   signOut: () => void;
+  updateUser: (patch: Partial<SessionUser>) => void;
 };
 
-const AuthContext = createContext<AuthState>({ session: null, ready: false, signIn: () => {}, signOut: () => {} });
+const AuthContext = createContext<AuthState>({
+  session: null, user: null, token: null, ready: false, signIn: () => {}, signOut: () => {}, updateUser: () => {},
+});
 const KEY = 'gallery-session';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -19,8 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setSession(JSON.parse(raw));
+      const parsed = JSON.parse(localStorage.getItem(KEY) ?? 'null');
+      // Les sessions créées avant l'ajout des rôles sont ignorées : il faut se reconnecter.
+      if (parsed?.accessToken && parsed?.user?.role) setSession(parsed);
+      else localStorage.removeItem(KEY);
     } catch {
       localStorage.removeItem(KEY);
     }
@@ -37,7 +44,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   }, []);
 
-  const value = useMemo(() => ({ session, ready, signIn, signOut }), [session, ready, signIn, signOut]);
+  const updateUser = useCallback((patch: Partial<SessionUser>) => {
+    setSession((cur) => {
+      if (!cur) return cur;
+      const next = { ...cur, user: { ...cur.user, ...patch } };
+      localStorage.setItem(KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Jeton expiré ou compte suspendu (réponse 401 de l'API)
+  useEffect(() => {
+    window.addEventListener('auth:expired', signOut);
+    return () => window.removeEventListener('auth:expired', signOut);
+  }, [signOut]);
+
+  const value = useMemo(
+    () => ({ session, user: session?.user ?? null, token: session?.accessToken ?? null, ready, signIn, signOut, updateUser }),
+    [session, ready, signIn, signOut, updateUser],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

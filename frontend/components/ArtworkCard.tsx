@@ -1,25 +1,29 @@
+'use client';
+
 import type { Artwork } from '@/lib/api';
-import { categoryOf } from '@/lib/categories';
 import { formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
 import Avatar from './Avatar';
+import { useCategories } from './CategoriesProvider';
 
 export default function ArtworkCard({ artwork, onOpen }: { artwork: Artwork; onOpen: (a: Artwork) => void }) {
+  const { categoryOf } = useCategories();
   const cat = categoryOf(artwork.tags);
   const artist = artwork.owner?.username ?? 'Artiste';
-  const sold = artwork.status === 'sold';
+  const unavailable = artwork.status !== 'available';
+  const badge = artwork.status === 'sold' ? 'Vendue' : artwork.status === 'reserved' ? 'Réservée' : null;
   return (
     <button
       type="button"
-      className={`card${sold ? ' card--sold' : ''}`}
-      data-cat={cat.slug}
+      className={`card${artwork.status === 'sold' ? ' card--sold' : ''}`}
+      data-tone={cat.tone}
       onClick={() => onOpen(artwork)}
-      aria-label={`${artwork.title}, par ${artist}, ${formatPrice(artwork.price)}${sold ? ', vendue' : ''}`}
+      aria-label={`${artwork.title}, par ${artist}, ${formatPrice(artwork.price)}${badge ? `, ${badge.toLowerCase()}` : ''}`}
     >
       <span className="card__media">
         <ArtImage src={artwork.imageUrl} alt="" />
         <span className="pill">{cat.label}</span>
-        {sold && <span className="badge-sold">Vendue</span>}
+        {unavailable && badge && <span className={`badge-sold${artwork.status === 'reserved' ? ' badge-sold--reserved' : ''}`}>{badge}</span>}
       </span>
       <span className="card__body">
         <span className="card__title">{artwork.title}</span>
