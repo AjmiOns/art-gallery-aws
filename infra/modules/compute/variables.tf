@@ -1,0 +1,9 @@
+variable "name" { type = string }
+variable "instance_type" { type = string }
+variable "key_name" { type = string }
+variable "instance_profile" { type = string }
+variable "app_port" { type = number }
+variable "public_subnet_id" { type = string }
+variable "app_subnet_id" { type = string }
+variable "bastion_sg_id" { type = string }
+variable "app_sg_id" { type = string }
