@@ -10,14 +10,6 @@ Infrastructure as Code for the **Online Art Gallery** project (exhibition and sa
 
 > Rule of the course: nothing is built by hand in the AWS console. Everything is created and destroyed with Terraform.
 
-## Team
-
-- Ahmed Liwane
-- Ala Eddine Sammouda
-- Insaf Azizi
-- Hamza Arfaoui
-- Ons Ajmi
-
 ## Architecture
 
 ![Architecture version 1](images/architercture-v1.png)
