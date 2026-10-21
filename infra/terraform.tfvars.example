@@ -1,0 +1,4 @@
+# cp terraform.tfvars.example terraform.tfvars
+# IP : curl -s https://checkip.amazonaws.com
+mon_ip     = "0.0.0.0/0"
+profil_iam = "LabInstanceProfile"
