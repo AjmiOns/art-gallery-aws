@@ -1,18 +1,16 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { ARTWORK_TAGS } from '../artwork.entity';
 
 export class QueryArtworksDto {
-  @IsOptional()
-  @IsIn(ARTWORK_TAGS)
+  @IsOptional() @IsString()
   tag?: string;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
+  @IsOptional() @Type(() => Number) @IsNumber()
   maxPrice?: number;
 
-  @IsOptional()
-  @IsString()
+  @IsOptional() @IsString()
   q?: string;
+
+  @IsOptional() @IsIn(['available', 'reserved', 'sold'])
+  status?: string;
 }

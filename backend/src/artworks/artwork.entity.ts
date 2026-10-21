@@ -8,8 +8,8 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 
-export const ARTWORK_TAGS = ['painting', 'wall art', 'digital', 'sketch'];
-export type ArtworkStatus = 'available' | 'sold';
+// available : en vente · reserved : demande acceptée, en attente de paiement · sold : payée
+export type ArtworkStatus = 'available' | 'reserved' | 'sold';
 
 // numeric est renvoyé en string par pg : on le convertit en nombre.
 export const decimalTransformer = {

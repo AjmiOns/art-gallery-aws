@@ -1,19 +1,22 @@
-// Source unique des catégories : l'ordre ici est l'ordre d'affichage sur la page d'accueil.
-export const CATEGORIES = [
-  { id: 'painting', slug: 'painting', label: 'Peintures', tagline: 'Huile, acrylique, couteau et pouring' },
-  { id: 'wall art', slug: 'wall-art', label: 'Décoration murale', tagline: 'Affiches et compositions pour vos murs' },
-  { id: 'digital', slug: 'digital', label: 'Art numérique', tagline: 'Créations génératives et illustrations' },
-  { id: 'sketch', slug: 'sketch', label: 'Croquis', tagline: 'Graphite, études et dessins botaniques' },
-] as const;
+export type Category = {
+  id: string;
+  slug: string;
+  label: string;
+  tagline: string;
+  tone: string;
+  sortOrder: number;
+  isActive: boolean;
+};
 
-export type Category = (typeof CATEGORIES)[number];
-export type CategoryId = Category['id'];
+export const TONES = ['peach', 'mint', 'lavender', 'sky', 'pink', 'butter'] as const;
 
-// La catégorie principale d'une œuvre est son premier tag reconnu.
-export function categoryOf(tags: string[]): Category {
-  for (const tag of tags) {
-    const found = CATEGORIES.find((c) => c.id === tag);
-    if (found) return found;
-  }
-  return CATEGORIES[0];
-}
+// Affichées tant que l'API n'a pas répondu (ou si elle est injoignable).
+export const FALLBACK_CATEGORIES: Category[] = [
+  { id: 'painting', slug: 'painting', label: 'Peintures', tagline: 'Huile, acrylique, couteau et pouring', tone: 'peach', sortOrder: 0, isActive: true },
+  { id: 'wall-art', slug: 'wall-art', label: 'Décoration murale', tagline: 'Affiches et compositions pour vos murs', tone: 'mint', sortOrder: 1, isActive: true },
+  { id: 'digital', slug: 'digital', label: 'Art numérique', tagline: 'Créations génératives et illustrations', tone: 'lavender', sortOrder: 2, isActive: true },
+  { id: 'sketch', slug: 'sketch', label: 'Croquis', tagline: 'Graphite, études et dessins botaniques', tone: 'sky', sortOrder: 3, isActive: true },
+];
+
+// Catégories d'origine : seules à disposer d'une bibliothèque d'images intégrée.
+export const BUILTIN_LIBRARY = ['painting', 'wall-art', 'digital', 'sketch'];

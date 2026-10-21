@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import type { Artwork } from '@/lib/api';
-import { categoryOf } from '@/lib/categories';
 import { formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
+import { useCategories } from './CategoriesProvider';
 
 export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; onOpen: (a: Artwork) => void }) {
+  const { categoryOf } = useCategories();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const count = slides.length;
@@ -43,7 +44,7 @@ export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; 
             <div
               key={a.id}
               className={`slide${i === index ? ' is-active' : ''}`}
-              data-cat={cat.slug}
+              data-tone={cat.tone}
               aria-hidden={i !== index}
               role="group"
               aria-roledescription="diapositive"
