@@ -18,22 +18,17 @@ Plateforme web où les artistes publient leurs œuvres (peintures, décoration m
 - [Fonctionnalités](#fonctionnalités)
 - [Aperçu](#aperçu)
 - [Rôles et permissions](#rôles-et-permissions)
-- [Achat et paiement](#achat-et-paiement)
 - [Stack technique](#stack-technique)
 - [Architecture cible](#architecture-cible)
 - [Structure du dépôt](#structure-du-dépôt)
 - [Démarrage rapide](#démarrage-rapide)
-- [Configuration](#configuration)
 - [Scripts](#scripts)
-- [Référence de l'API](#référence-de-lapi)
 - [Modèle de données](#modèle-de-données)
 - [Visualiser la base de données](#visualiser-la-base-de-données)
 - [Données de test](#données-de-test)
 - [Déploiement](#déploiement)
 - [Workflow Git](#workflow-git)
-- [Dépannage](#dépannage)
 - [Feuille de route](#feuille-de-route)
-- [Auteur](#auteur)
 
 ## Fonctionnalités
 
@@ -93,46 +88,6 @@ Le rôle est choisi à l'inscription (acheteur ou artiste). Le compte administra
 | Statistiques, utilisateurs, catégories | | | | oui |
 
 **Règles de la messagerie** : on écrit à l'artiste depuis la fiche d'une de ses œuvres, ou à une personne avec qui on a déjà échangé ou commandé. Les administrateurs peuvent écrire à tous et recevoir de tous. Ces règles limitent les messages non sollicités.
-
-## Achat et paiement
-
-Une œuvre n'est **jamais** déclarée vendue d'un simple clic. Le parcours passe par une demande validée par l'artiste, puis par un paiement confirmé.
-
-```mermaid
-stateDiagram-v2
-    [*] --> pending: l'acheteur envoie une demande
-    pending --> accepted: l'artiste accepte (œuvre réservée)
-    pending --> rejected: l'artiste refuse
-    pending --> cancelled: annulation
-    accepted --> paid: paiement validé (œuvre vendue)
-    accepted --> cancelled: annulation (œuvre libérée)
-    paid --> [*]
-    rejected --> [*]
-    cancelled --> [*]
-```
-
-- Quand l'artiste accepte, l'œuvre passe en **réservée** pour cet acheteur et les autres demandes sont refusées automatiquement.
-- Le paiement valide la commande et marque l'œuvre **vendue** dans une seule transaction, avec verrou en base : impossible de vendre deux fois.
-- Seuls la marque et les 4 derniers chiffres de la carte sont enregistrés, jamais le numéro complet.
-
-Deux prestataires gratuits, sélectionnés par `PAYMENT_PROVIDER` :
-
-| Prestataire | Usage | Configuration |
-|---|---|---|
-| `mock` (défaut) | Passerelle de démonstration : formulaire de carte réaliste avec aperçu, validation du numéro (Luhn), de la date et du CVC, délai bancaire simulé, refus simulés. Aucun débit. | Aucune |
-| `stripe` | [Stripe Checkout](https://stripe.com/docs/checkout) en **mode test** : vraie page de paiement hébergée par Stripe, sans argent réel. | Compte Stripe gratuit, clé `sk_test_…` |
-
-**Cartes de test** (passerelle `mock`) : `4242 4242 4242 4242` réussit, `4000 0000 0000 0002` est refusée, `4000 0000 0000 9995` simule des fonds insuffisants. Date future et CVC au choix.
-
-**Activer Stripe** : créez un compte gratuit sur stripe.com, restez en mode test, copiez la clé secrète depuis *Développeurs → Clés API*, puis dans `backend/.env` :
-
-```
-PAYMENT_PROVIDER=stripe
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_CURRENCY=eur
-```
-
-Redémarrez le backend. Stripe ne gère pas le dinar tunisien : le même montant est débité en euros en mode test. Au retour de la page Stripe, le backend interroge Stripe pour confirmer le paiement au lieu de faire confiance à l'URL de retour.
 
 ## Stack technique
 
@@ -203,36 +158,6 @@ Ouvrez le site via `localhost` : une autre adresse est refusée par la politique
 
 > **Windows PowerShell 5** : l'opérateur `&&` n'est pas reconnu. Utilisez `;` ou lancez les commandes une par une. Remplacez `cp` par `Copy-Item` si besoin.
 
-## Configuration
-
-### Backend (`backend/.env`)
-
-| Variable | Défaut | Description |
-|---|---|---|
-| `PORT` | `3001` | Port de l'API |
-| `NODE_ENV` | `development` | `production` désactive `synchronize` |
-| `FRONTEND_URL` | `http://localhost:3000` | Origines CORS autorisées, séparées par des virgules ; sert aussi aux URL de retour Stripe |
-| `PUBLIC_API_URL` | `http://localhost:3001` | URL publique de l'API, utilisée pour les liens des images envoyées |
-| `DB_HOST` / `DB_PORT` | `localhost` / `5432` | Serveur PostgreSQL |
-| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `gallery` / `gallery` / `art_gallery` | Identifiants de la base |
-| `DB_SSL` | `false` | `true` pour Amazon RDS |
-| `JWT_SECRET` | `change-me` | Secret de signature des jetons. **À remplacer.** |
-| `JWT_EXPIRES_IN` | `1d` | Durée de validité d'un jeton |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `admin@gallery.test` / `Admin1234!` | Compte administrateur créé au premier démarrage. **À changer en production.** |
-| `CURRENCY` | `TND` | Devise affichée pour les paiements de démonstration |
-| `PAYMENT_PROVIDER` | `mock` | `mock` ou `stripe` |
-| `STRIPE_SECRET_KEY` | vide | Clé secrète de test `sk_test_…` |
-| `STRIPE_CURRENCY` | `eur` | Devise débitée par Stripe |
-
-### Frontend (`frontend/.env.local`)
-
-| Variable | Défaut | Description |
-|---|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api` | URL de l'API, intégrée au build |
-| `NEXT_PUBLIC_CURRENCY` | `TND` | Devise affichée sur le site |
-
-Les fichiers `.env` ne sont jamais versionnés. En production, les secrets (`JWT_SECRET`, mot de passe RDS, clé Stripe) proviennent d'AWS Secrets Manager.
-
 ## Scripts
 
 | Commande (racine) | Action |
@@ -244,62 +169,6 @@ Les fichiers `.env` ne sont jamais versionnés. En production, les secrets (`JWT
 | `npm run seed` | Injecte des données de test (voir [Données de test](#données-de-test)) |
 
 Par application : `npm run build` produit le backend (`backend/dist`) ou l'export statique du frontend (`frontend/out`).
-
-## Référence de l'API
-
-Préfixe : `/api`. Les routes protégées attendent l'en-tête `Authorization: Bearer <accessToken>`. Les corps de requête sont validés : un champ inconnu est refusé (`400`).
-
-| Méthode | Route | Accès | Description |
-|---|---|---|---|
-| `POST` | `/auth/register` | public | Crée un compte (`role` : `buyer` ou `artist`) |
-| `POST` | `/auth/login` | public | Retourne un jeton et le rôle |
-| `GET` | `/categories` | public | Catégories actives |
-| `GET` | `/artworks` | public | Liste filtrable (`tag`, `maxPrice`, `q`, `status`) |
-| `GET` | `/artworks/:id` | public | Détail d'une œuvre |
-| `GET` | `/payments/config` | public | Prestataire de paiement actif |
-| `GET` | `/health` | public | Santé de l'API et de la base (ALB) |
-| `GET` `PATCH` | `/users/me` | connecté | Lire et modifier son profil |
-| `PATCH` | `/users/me/password` | connecté | Changer son mot de passe |
-| `GET` | `/artworks/mine` | connecté | Mes œuvres |
-| `POST` | `/orders` | acheteur, artiste | Envoie une demande d'achat |
-| `GET` | `/orders/bought` | connecté | Mes demandes et achats |
-| `GET` | `/orders/:id` | acheteur, artiste concernés, admin | Détail d'une commande et reçu |
-| `PATCH` | `/orders/:id/cancel` | acheteur, artiste concernés, admin | Annule une commande non payée |
-| `POST` | `/payments/checkout` | acheteur | Démarre le paiement d'une commande acceptée |
-| `POST` | `/payments/mock/confirm` | acheteur | Valide le paiement par carte (passerelle de démonstration) |
-| `POST` | `/payments/stripe/confirm` | acheteur | Confirme un paiement Stripe au retour de Checkout |
-| `POST` | `/messages` | connecté | Envoie un message |
-| `GET` | `/messages/threads` | connecté | Conversations avec dernier message et non lus |
-| `GET` | `/messages/with/:userId` | connecté | Conversation (marque les messages comme lus) |
-| `GET` | `/messages/unread-count` | connecté | Nombre de messages non lus |
-| `POST` `PATCH` `DELETE` | `/artworks`, `/artworks/:id` | artiste (ses œuvres), admin | Publie, modifie, supprime |
-| `POST` | `/uploads` | artiste, admin | Envoie une image (`multipart`, champ `file`) |
-| `GET` | `/orders/sales` | artiste, admin | Demandes reçues |
-| `PATCH` | `/orders/:id/accept`, `/reject` | artiste de l'œuvre, admin | Accepte ou refuse une demande |
-| `GET` | `/admin/stats` | admin | Statistiques |
-| `GET` `PATCH` `DELETE` | `/admin/users`, `/admin/users/:id` | admin | Gestion des utilisateurs |
-| `GET` | `/admin/orders` | admin | Toutes les commandes (`status`) |
-| `GET` `POST` `PATCH` `DELETE` | `/admin/categories`, `/admin/categories/:id` | admin | Gestion des catégories |
-
-**Parcours d'achat en ligne de commande**
-
-```bash
-# L'acheteur envoie une demande
-curl -X POST http://localhost:3001/api/orders -H "Authorization: Bearer $BUYER" \
-  -H "Content-Type: application/json" -d '{"artworkId":"<id>","message":"Bonjour !"}'
-
-# L'artiste accepte : l'œuvre est réservée
-curl -X PATCH http://localhost:3001/api/orders/<orderId>/accept -H "Authorization: Bearer $ARTIST"
-
-# L'acheteur paie (passerelle de démonstration)
-curl -X POST http://localhost:3001/api/payments/checkout -H "Authorization: Bearer $BUYER" \
-  -H "Content-Type: application/json" -d '{"orderId":"<orderId>"}'
-curl -X POST http://localhost:3001/api/payments/mock/confirm -H "Authorization: Bearer $BUYER" \
-  -H "Content-Type: application/json" \
-  -d '{"paymentId":"<paymentId>","cardNumber":"4242 4242 4242 4242","expiry":"12/34","cvc":"123","holder":"ONS AJMI"}'
-```
-
-**Erreurs courantes** : `400` données invalides ou action impossible, `401` jeton absent, expiré ou compte suspendu, `402` paiement refusé, `403` droits insuffisants, `404` ressource introuvable, `409` conflit (e-mail déjà utilisé, œuvre indisponible, suppression d'un élément lié à des commandes).
 
 ## Modèle de données
 
@@ -479,20 +348,6 @@ Tous les services doivent rester compatibles avec les restrictions d'AWS Academy
 | `infra` | Terraform, scripts AWS |
 
 Ne committez jamais de fichier `.env`, de `node_modules`, d'état Terraform (`*.tfstate`) ni le contenu de `backend/uploads/` : le `.gitignore` les exclut.
-
-## Dépannage
-
-| Symptôme | Cause probable | Solution |
-|---|---|---|
-| `Failed to fetch` sur le site | Site ouvert via une adresse autre que `localhost`, ou API arrêtée | Ouvrir `http://localhost:3000` et vérifier `http://localhost:3001/api/health` |
-| `EADDRINUSE` sur le port 3001 ou 3000 | Un ancien processus tourne encore | Trouver le processus avec `Get-NetTCPConnection -LocalPort 3001`, puis `Stop-Process -Id <PID>` |
-| `password authentication failed for user "gallery"` | Un autre PostgreSQL occupe le port 5432 | Dans `docker-compose.yml`, mapper `5433:5432`, puis mettre `DB_PORT=5433` dans `backend/.env` |
-| `ConnectionRefused` pendant le seed | Backend non démarré | Lancer `npm run dev` dans un autre terminal, puis relancer le seed |
-| Pas de compte administrateur | `ADMIN_EMAIL` / `ADMIN_PASSWORD` absents de `backend/.env` | Les ajouter et redémarrer le backend |
-| « Réservé aux artistes » après la mise à jour | Compte créé avant l'ajout des rôles (rôle `buyer`) | Se réinscrire en artiste, ou `UPDATE users SET role = 'artist' WHERE email = '…'` |
-| Adminer inaccessible | Port 8080 occupé | Dans `docker-compose.override.yml`, remplacer `8080:8080` par `8081:8080` |
-| `EIDLETIMEOUT` pendant `npm install` | Réseau lent | `npm config set fetch-timeout 600000`, puis relancer |
-| `&&` non reconnu | PowerShell 5 | Séparer les commandes par `;` |
 
 ## Feuille de route
 
