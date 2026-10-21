@@ -5,6 +5,11 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ArtworksModule } from './artworks/artworks.module';
 import { OrdersModule } from './orders/orders.module';
+import { CategoriesModule } from './categories/categories.module';
+import { PaymentsModule } from './payments/payments.module';
+import { MessagesModule } from './messages/messages.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -27,8 +32,13 @@ import { HealthController } from './health/health.controller';
     }),
     UsersModule,
     AuthModule,
+    CategoriesModule,
     ArtworksModule,
     OrdersModule,
+    PaymentsModule,
+    MessagesModule,
+    UploadsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
 })

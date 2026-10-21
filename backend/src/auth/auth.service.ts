@@ -17,8 +17,8 @@ export class AuthService {
       throw new ConflictException('Cet e-mail est déjà utilisé.');
     }
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = await this.users.create({ email, username: dto.username, passwordHash });
-    return this.session(user.id, user.email, user.username);
+    const user = await this.users.create({ email, username: dto.username, passwordHash, role: dto.role ?? 'buyer' });
+    return this.session(user);
   }
 
   async login(dto: LoginDto) {
@@ -26,13 +26,14 @@ export class AuthService {
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('E-mail ou mot de passe incorrect.');
     }
-    return this.session(user.id, user.email, user.username);
+    if (!user.isActive) throw new UnauthorizedException('Ce compte est suspendu. Contactez un administrateur.');
+    return this.session(user);
   }
 
-  private session(id: string, email: string, username: string) {
+  private session(user: { id: string; email: string; username: string; role: string }) {
     return {
-      accessToken: this.jwt.sign({ sub: id, email }),
-      user: { id, email, username },
+      accessToken: this.jwt.sign({ sub: user.id, email: user.email }),
+      user: { id: user.id, email: user.email, username: user.username, role: user.role },
     };
   }
 }
