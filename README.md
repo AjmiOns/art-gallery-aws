@@ -148,31 +148,7 @@ Redémarrez le backend. Stripe ne gère pas le dinar tunisien : le même montant
 
 Le frontend est exporté en fichiers statiques servis par S3 et CloudFront. L'API tourne sur des instances EC2 privées derrière un Application Load Balancer, sur deux zones de disponibilité. La base est une instance RDS PostgreSQL Multi-AZ, isolée dans des sous-réseaux privés.
 
-```mermaid
-flowchart LR
-    user(["Utilisateurs"]) --> r53["Route 53"]
-    r53 --> cf["CloudFront"]
-    cf --> s3["S3 : frontend statique"]
-    user -- "API HTTPS" --> alb
 
-    subgraph vpc["VPC 10.0.0.0/16"]
-        subgraph pub["Sous-réseaux publics (2 AZ)"]
-            alb["Application Load Balancer"]
-            bastion["Bastion SSH"]
-        end
-        subgraph app["Sous-réseaux privés applicatifs (2 AZ)"]
-            asg["Auto Scaling Group : EC2 NestJS"]
-        end
-        subgraph data["Sous-réseaux privés données (2 AZ)"]
-            rds[("RDS PostgreSQL Multi-AZ")]
-        end
-    end
-
-    alb --> asg --> rds
-    bastion -.-> asg
-    asg -.-> sm["Secrets Manager"]
-    asg -.-> cw["CloudWatch + SNS"]
-```
 
 > **État d'avancement** : l'application (frontend, API, base, paiement) est fonctionnelle en local. Les modules Terraform de `infra/` sont à écrire. Les images envoyées par les artistes sont stockées sur le disque du backend (`backend/uploads`) : en production, elles iront sur S3, car les instances de l'Auto Scaling Group ne partagent pas de disque.
 
