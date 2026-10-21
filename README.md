@@ -102,7 +102,7 @@ terraform/
 |-- outputs.tf                  bastion IP, backend IP, SSH command
 |-- terraform.tfvars.example    template for your personal values
 |-- destroy.sh                  destroy + leftover check
-|-- images/                     architecture diagrams
+|-- images/                     architecture diagrams + screenshots
 `-- modules/
     |-- network/                VPC, subnets, gateways, routes, endpoint
     |-- security/               4 security groups
@@ -141,6 +141,10 @@ curl -4 ifconfig.me        # your public IPv4
 nano terraform.tfvars      # admin_cidr = "YOUR.IP/32"
 ```
 
+![Public IP and terraform.tfvars](images/screenshots/01-admin-ip-tfvars.webp)
+
+*The admin IP is read with `curl -4 ifconfig.me` and written to `admin_cidr` in `terraform.tfvars` (IP blurred). Only this address can reach the bastion on port 22.*
+
 ### 3. Deploy
 
 ```bash
@@ -150,22 +154,92 @@ terraform plan             # expected: Plan: 29 to add
 terraform apply
 ```
 
-### 4. Test
+**Init and validate**
+
+![terraform init](images/screenshots/02-terraform-init.webp)
+
+![terraform validate](images/screenshots/03-terraform-validate.webp)
+
+**Plan: 29 resources to add, 0 to change, 0 to destroy**
+
+![terraform plan, start](images/screenshots/04-terraform-plan.webp)
+
+![terraform plan, summary](images/screenshots/05-terraform-plan-summary.webp)
+
+**Apply: 29 resources created**
+
+![terraform apply, start](images/screenshots/06-terraform-apply.webp)
+
+![terraform apply, progress](images/screenshots/07-apply-progress.webp)
+
+The NAT Gateway is the slowest resource (about 2 minutes to create). The two instances are ready in about 15 seconds.
+
+![terraform apply, complete and outputs](images/screenshots/08-apply-complete.webp)
+
+### 4. Verify in the AWS console
+
+Everything below was created by Terraform, nothing by hand.
+
+**VPC resource map**: `art-gallery-vpc` (`10.0.0.0/16`) with its 6 subnets across `us-east-1a` / `us-east-1b`, the route tables, the Internet Gateway, the NAT Gateway and the S3 endpoint.
+
+![VPC resource map](images/screenshots/09-console-vpc-resource-map.webp)
+
+**Subnets**
+
+![Subnets](images/screenshots/10-console-subnets.webp)
+
+**Route tables**: `rt-public`, `rt-app` and `rt-db`, two subnets each. The extra "Main" route table is created automatically by AWS with every VPC and is not used.
+
+![Route tables](images/screenshots/11-console-route-tables.webp)
+
+**Internet Gateway**
+
+![Internet Gateway](images/screenshots/12-console-internet-gateway.webp)
+
+**NAT Gateway**: public, zonal, placed in public subnet 1.
+
+![NAT Gateway](images/screenshots/13-console-nat-gateway.webp)
+
+**S3 gateway endpoint**
+
+![S3 gateway endpoint](images/screenshots/14-console-s3-endpoint.webp)
+
+**Security groups**: `alb-sg`, `bastion-sg`, `app-sg`, `db-sg`. The two `default` groups belong to the VPCs, not to us.
+
+![Security groups](images/screenshots/15-console-security-groups.webp)
+
+**Instances**: the bastion (public IP) and the backend (no public IP), both running and passing 3/3 status checks.
+
+![EC2 instances](images/screenshots/16-console-instances.webp)
+
+### 5. Test
 
 ```bash
 eval "$(ssh-agent -s)"
 ssh-add labsuser.pem
 ssh -J ec2-user@<bastion_public_ip> ec2-user@<backend_private_ip>
-curl localhost:3000        # expected: art-gallery backend OK
+curl localhost:3000           # expected: art-gallery backend OK
+curl -s https://ifconfig.me   # expected: the NAT Gateway Elastic IP
 ```
 
-### 5. Destroy (mandatory at the end of every session)
+![SSH through the bastion and tests on the backend](images/screenshots/17-ssh-backend-test.webp)
+
+Two things are proven here:
+
+- The private backend (`10.0.11.x`) is reachable only through the bastion, and the Node.js server answers `art-gallery backend OK`.
+- The backend reaches the internet through the NAT Gateway: its outbound public IP is the NAT Gateway's Elastic IP (same address as in the NAT Gateway screenshot), not an address of the instance itself.
+
+### 6. Destroy (mandatory at the end of every session)
 
 ```bash
 ./destroy.sh
 ```
 
 The script runs `terraform destroy`, then checks EC2, NAT Gateways, Elastic IPs, load balancers and RDS. It must finish with `OK: nothing billable left.`
+
+![Destroy and leftover check](images/screenshots/18-destroy.webp)
+
+*29 resources destroyed (the NAT Gateway takes about 1 minute). The leftover check confirms nothing billable remains.*
 
 ## Cost
 
@@ -212,6 +286,7 @@ About **0.08-0.10 USD per hour**. A forgotten week costs about 35% of the 50 USD
 - Keep `terraform.tfstate` until you have run `destroy`; without it Terraform cannot find your resources.
 - Database passwords must be passed as `sensitive` variables, never written in Git.
 - If your public IP changes, update `admin_cidr` and run `terraform apply` again.
+- Screenshots in `images/screenshots/` have the admin IP and the AWS account ID blurred. Do the same for any new screenshot before committing it.
 
 ## Troubleshooting
 
