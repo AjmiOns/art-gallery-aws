@@ -1,22 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { api, Artwork } from '@/lib/api';
-import { categoryOf } from '@/lib/categories';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, Artwork, Order } from '@/lib/api';
 import { formatDate, formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
 import Avatar from './Avatar';
 import { useAuth } from './AuthProvider';
+import { useCategories } from './CategoriesProvider';
 import { useToast } from './Toast';
 
-type Props = { artwork: Artwork | null; onClose: () => void; onBought: () => void };
+type Props = { artwork: Artwork | null; onClose: () => void };
 
-export default function ArtworkDialog({ artwork, onClose, onBought }: Props) {
+export default function ArtworkDialog({ artwork, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
-  const { session } = useAuth();
+  const { user, token } = useAuth();
+  const { categoryOf } = useCategories();
   const toast = useToast();
-  const [confirming, setConfirming] = useState(false);
+  const [myOrder, setMyOrder] = useState<Order | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,18 +28,49 @@ export default function ArtworkDialog({ artwork, onClose, onBought }: Props) {
     if (!dialog) return;
     if (artwork && !dialog.open) dialog.showModal();
     if (!artwork && dialog.open) dialog.close();
-    setConfirming(false);
+    setAsking(false);
+    setNote('');
     setError('');
   }, [artwork]);
 
-  async function buy() {
-    if (!session || !artwork) return;
+  // Demande en cours de l'utilisateur pour cette œuvre (en attente ou acceptée)
+  const loadOrder = useCallback(async () => {
+    if (!artwork || !token || user?.role === 'admin') return setMyOrder(null);
+    try {
+      const orders = await api.boughtOrders(token);
+      setMyOrder(orders.find((o) => o.artwork.id === artwork.id && (o.status === 'pending' || o.status === 'accepted')) ?? null);
+    } catch {
+      setMyOrder(null);
+    }
+  }, [artwork, token, user?.role]);
+  useEffect(() => {
+    setMyOrder(null);
+    loadOrder();
+  }, [loadOrder]);
+
+  async function sendRequest() {
+    if (!artwork || !token) return;
     setBusy(true);
     setError('');
     try {
-      await api.buy(artwork.id, session.accessToken);
-      toast.show(`« ${artwork.title} » est maintenant à vous.`);
-      onBought();
+      await api.requestPurchase(artwork.id, note, token);
+      toast.show("Demande envoyée. L'artiste doit maintenant la valider.");
+      setAsking(false);
+      await loadOrder();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelRequest() {
+    if (!myOrder || !token) return;
+    setBusy(true);
+    try {
+      await api.orderAction(myOrder.id, 'cancel', token);
+      toast.show('Demande annulée.');
+      await loadOrder();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -45,8 +79,8 @@ export default function ArtworkDialog({ artwork, onClose, onBought }: Props) {
   }
 
   const cat = artwork ? categoryOf(artwork.tags) : null;
-  const sold = artwork?.status === 'sold';
-  const mine = !!artwork && session?.user.id === artwork.ownerId;
+  const mine = !!artwork && user?.id === artwork.ownerId;
+  const contactHref = artwork ? `/messages?to=${artwork.ownerId}&artwork=${artwork.id}` : '#';
 
   return (
     <dialog
@@ -57,7 +91,7 @@ export default function ArtworkDialog({ artwork, onClose, onBought }: Props) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       {artwork && cat && (
-        <div className="dialog__body" data-cat={cat.slug}>
+        <div className="dialog__body" data-tone={cat.tone}>
           <div className="dialog__media">
             <ArtImage src={artwork.imageUrl} alt={artwork.title} eager />
           </div>
@@ -77,27 +111,52 @@ export default function ArtworkDialog({ artwork, onClose, onBought }: Props) {
             {error && <p className="form-error" role="alert">{error}</p>}
 
             <div className="dialog__actions">
-              {sold ? (
+              {artwork.status === 'sold' ? (
                 <span className="badge-sold badge-sold--inline">Cette œuvre est vendue</span>
               ) : mine ? (
                 <span className="muted">Vous êtes l&apos;artiste de cette œuvre.</span>
-              ) : !session ? (
-                <Link href="/login" className="btn btn--primary">
-                  Se connecter pour acheter
-                </Link>
-              ) : confirming ? (
+              ) : !user ? (
                 <>
-                  <button type="button" className="btn btn--primary" onClick={buy} disabled={busy}>
-                    {busy ? 'Achat en cours…' : `Confirmer l'achat, ${formatPrice(artwork.price)}`}
-                  </button>
-                  <button type="button" className="btn btn--ghost" onClick={() => setConfirming(false)} disabled={busy}>
-                    Annuler
-                  </button>
+                  <Link href="/login" className="btn btn--primary">Se connecter pour acheter</Link>
+                  <Link href="/register" className="btn btn--ghost">Créer un compte</Link>
                 </>
+              ) : myOrder?.status === 'accepted' ? (
+                <>
+                  <p className="dialog__note dialog__note--ok">L&apos;artiste a accepté votre demande. Finalisez le paiement pour devenir propriétaire.</p>
+                  <Link href={`/checkout?order=${myOrder.id}`} className="btn btn--primary">Payer {formatPrice(myOrder.amount)}</Link>
+                  <button type="button" className="btn btn--ghost" onClick={cancelRequest} disabled={busy}>Annuler</button>
+                </>
+              ) : myOrder?.status === 'pending' ? (
+                <>
+                  <p className="dialog__note">Demande envoyée : en attente de la réponse de l&apos;artiste.</p>
+                  <button type="button" className="btn btn--soft" onClick={cancelRequest} disabled={busy}>Annuler ma demande</button>
+                </>
+              ) : artwork.status === 'reserved' ? (
+                <p className="dialog__note">Cette œuvre est réservée par un autre acheteur.</p>
+              ) : user.role === 'admin' ? (
+                <p className="dialog__note">Les administrateurs ne peuvent pas acheter.</p>
+              ) : asking ? (
+                <div className="ask">
+                  <label className="field">
+                    <span>Message pour l&apos;artiste (facultatif)</span>
+                    <textarea rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Une question, une précision de livraison…" />
+                  </label>
+                  <div className="row-actions">
+                    <button type="button" className="btn btn--primary" onClick={sendRequest} disabled={busy}>
+                      {busy ? 'Envoi…' : 'Envoyer la demande'}
+                    </button>
+                    <button type="button" className="btn btn--ghost" onClick={() => setAsking(false)} disabled={busy}>Annuler</button>
+                  </div>
+                </div>
               ) : (
-                <button type="button" className="btn btn--primary" onClick={() => setConfirming(true)}>
-                  Acheter cette œuvre
-                </button>
+                <>
+                  <button type="button" className="btn btn--primary" onClick={() => setAsking(true)}>Demander l&apos;achat</button>
+                  <p className="dialog__hint">L&apos;artiste valide votre demande, puis vous payez en ligne en toute sécurité.</p>
+                </>
+              )}
+
+              {!mine && artwork.status !== 'sold' && user && (
+                <Link href={contactHref} className="btn btn--soft">Contacter l&apos;artiste</Link>
               )}
             </div>
           </div>

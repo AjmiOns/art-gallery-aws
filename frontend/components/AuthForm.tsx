@@ -7,30 +7,33 @@ import { api } from '@/lib/api';
 import { useAuth } from './AuthProvider';
 
 const SAMPLES = ['/artworks/painting/painting-08.jpg', '/artworks/digital/digital-13.jpg', '/artworks/wall-art/wall-art-02.jpg'];
+const HOME = { admin: '/admin', artist: '/artist', buyer: '/' } as const;
 
 export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
-  const { session, ready, signIn } = useAuth();
+  const { user, ready, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'buyer' | 'artist'>('buyer');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const isLogin = mode === 'login';
 
+  // Déjà connecté : on renvoie vers l'espace correspondant au rôle.
   useEffect(() => {
-    if (ready && session) router.replace('/');
-  }, [ready, session, router]);
+    if (ready && user) router.replace(HOME[user.role]);
+  }, [ready, user, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      const s = isLogin ? await api.login({ email, password }) : await api.register({ email, username, password });
+      const s = isLogin ? await api.login({ email, password }) : await api.register({ email, username, password, role });
       signIn(s);
-      router.push('/');
+      router.push(HOME[s.user.role]);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -49,8 +52,8 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
           <h1>{isLogin ? 'Content de vous revoir.' : 'Rejoignez la galerie.'}</h1>
           <p>
             {isLogin
-              ? 'Retrouvez vos œuvres, vos achats et les nouveautés de vos artistes préférés.'
-              : 'Publiez vos créations, fixez votre prix et vendez-les à une communauté de passionnés.'}
+              ? 'Retrouvez vos œuvres, vos demandes d’achat et vos messages.'
+              : 'Achetez des œuvres uniques ou publiez vos créations et vendez-les à une communauté de passionnés.'}
           </p>
           <div className="auth__thumbs" aria-hidden="true">
             {SAMPLES.map((src, i) => (
@@ -62,17 +65,31 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       </div>
 
       <div className="auth__panel">
-        <form className="auth__card" onSubmit={submit} noValidate={false}>
+        <form className="auth__card" onSubmit={submit}>
           <div className="tabs" role="tablist" aria-label="Connexion ou inscription">
-            <Link href="/login" role="tab" aria-selected={isLogin} className={isLogin ? 'is-active' : ''}>
-              Connexion
-            </Link>
-            <Link href="/register" role="tab" aria-selected={!isLogin} className={!isLogin ? 'is-active' : ''}>
-              Inscription
-            </Link>
+            <Link href="/login" role="tab" aria-selected={isLogin} className={isLogin ? 'is-active' : ''}>Connexion</Link>
+            <Link href="/register" role="tab" aria-selected={!isLogin} className={!isLogin ? 'is-active' : ''}>Inscription</Link>
           </div>
 
           <h2>{isLogin ? 'Se connecter' : 'Créer un compte'}</h2>
+
+          {!isLogin && (
+            <fieldset className="field">
+              <legend>Je suis</legend>
+              <div className="role-pick">
+                <label className={role === 'buyer' ? 'is-active' : ''}>
+                  <input type="radio" name="role" value="buyer" checked={role === 'buyer'} onChange={() => setRole('buyer')} />
+                  <strong>Acheteur</strong>
+                  <span>Je découvre et j&apos;achète des œuvres</span>
+                </label>
+                <label className={role === 'artist' ? 'is-active' : ''}>
+                  <input type="radio" name="role" value="artist" checked={role === 'artist'} onChange={() => setRole('artist')} />
+                  <strong>Artiste</strong>
+                  <span>Je publie et je vends mes créations</span>
+                </label>
+              </div>
+            </fieldset>
+          )}
 
           <label className="field">
             <span>Adresse e-mail</span>
@@ -81,8 +98,8 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
 
           {!isLogin && (
             <label className="field">
-              <span>Nom d&apos;artiste</span>
-              <input required minLength={2} autoComplete="nickname" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Comment vous signez vos œuvres" />
+              <span>{role === 'artist' ? "Nom d'artiste" : 'Nom affiché'}</span>
+              <input required minLength={2} autoComplete="nickname" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={role === 'artist' ? 'Comment vous signez vos œuvres' : 'Votre nom'} />
             </label>
           )}
 
@@ -98,9 +115,7 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="8 caractères minimum"
               />
-              <button type="button" onClick={() => setShow((s) => !s)} aria-pressed={show}>
-                {show ? 'Masquer' : 'Afficher'}
-              </button>
+              <button type="button" onClick={() => setShow((s) => !s)} aria-pressed={show}>{show ? 'Masquer' : 'Afficher'}</button>
             </div>
           </label>
 
