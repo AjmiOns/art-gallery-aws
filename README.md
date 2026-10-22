@@ -512,9 +512,3 @@ Ne committez jamais de fichier `.env`, de `node_modules`, d'état Terraform (`*.
 - [ ] Tests automatisés et intégration continue (GitHub Actions)
 - [ ] Pagination de l'API
 - [ ] Messagerie en temps réel (Socket.io)
-
-## Auteur
-
-**Ons Ajmi** ([@AjmiOns](https://github.com/AjmiOns))
-
-Projet académique. Aucune licence n'est définie pour le moment : ajoutez un fichier `LICENSE` avant toute réutilisation publique.
