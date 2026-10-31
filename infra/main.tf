@@ -1,3 +1,11 @@
+# ---------------------------------------------------------------------------
+# Root module: wires the three modules together (network, security, compute).
+# Each module is a reusable block with its own variables.tf, main.tf and
+# outputs.tf. Values flow between modules through their outputs.
+# ---------------------------------------------------------------------------
+
+# Ask AWS which availability zones (AZs) are currently usable in the region.
+# state = "available" filters out zones that are impaired or unavailable.
 data "aws_availability_zones" "available" {
   state = "available"
 }
