@@ -1,3 +1,12 @@
+# ---------------------------------------------------------------------------
+# Root outputs: values Terraform prints after "terraform apply" and on demand
+# with "terraform output". They give you the facts you need to use the
+# infrastructure (IP addresses, SSH command) without opening the AWS console.
+# Each value comes from a child module's outputs.tf.
+# ---------------------------------------------------------------------------
+
+# ID of the VPC created by the network module.
+# Useful to find the VPC in the console or to reference it in later phases.
 output "vpc_id" {
   value = module.network.vpc_id
 }
