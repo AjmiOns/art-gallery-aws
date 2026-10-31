@@ -27,4 +27,7 @@ backend/uploads/*
 *.tfstate
 *.tfstate.*
 .terraform/
+terraform.tfvars*.pem
 terraform.tfvars
+*.tfstate*
+.terraform/
