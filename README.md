@@ -6,73 +6,92 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-test%20mode-635BFF?logo=stripe&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-planned-7B42BC?logo=terraform&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-in%20progress-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
 
-Plateforme web où les artistes publient leurs œuvres (peintures, décoration murale, art numérique, croquis) et où les acheteurs les découvrent, contactent l'artiste et les achètent avec un vrai parcours de paiement. L'application est conçue pour être déployée sur une infrastructure AWS 3 tiers haute disponibilité.
+Plateforme web où les artistes publient leurs œuvres (peintures, décoration murale, art numérique, croquis) et où les acheteurs les découvrent, contactent l'artiste et les achètent avec un vrai parcours de paiement. L'application est déployée sur une infrastructure AWS 3 tiers haute disponibilité, entièrement décrite avec Terraform.
 
-<img src="docs/screenshots/home.jpg" alt="Page d'accueil de la galerie" width="100%">
-
-> **Ce README donne la vue d'ensemble.** Le détail de chaque partie se trouve dans le README de son dossier :
->
-> | Partie | Contenu | Documentation |
-> |---|---|---|
-> | Frontend | Interface Next.js, pages par rôle, export statique | [`frontend/README.md`](frontend/README.md) |
-> | Backend | API NestJS, modèle de données, paiement, seed | [`backend/README.md`](backend/README.md) |
-> | Infrastructure | Terraform, réseau, sécurité, AWS Learner Lab | [`infra/README.md`](infra/README.md) |
+Le projet comporte trois parties. **Ce README donne la vue d'ensemble ; le détail de chaque partie est dans le README de son dossier.**
 
 ## Sommaire
 
+- [Les trois parties du projet](#les-trois-parties-du-projet)
+- [Architecture globale](#architecture-globale)
 - [Fonctionnalités](#fonctionnalités)
-- [Aperçu](#aperçu)
 - [Rôles et permissions](#rôles-et-permissions)
 - [Stack technique](#stack-technique)
-- [Architecture cible](#architecture-cible)
 - [Structure du dépôt](#structure-du-dépôt)
 - [Démarrage rapide](#démarrage-rapide)
 - [Scripts](#scripts)
 - [Workflow Git](#workflow-git)
 - [Feuille de route](#feuille-de-route)
 
+## Les trois parties du projet
+
+| | Frontend | Backend | Infrastructure |
+|---|---|---|---|
+| **Rôle** | Interface web : catalogue, espaces acheteur, artiste et administrateur | API REST : authentification, œuvres, commandes, paiement, messagerie, administration | Réseau, sécurité, calcul, base de données et stockage sur AWS |
+| **Technologies** | Next.js 15, React 19, TypeScript, CSS natif | NestJS 10, TypeORM, Passport JWT, Stripe, PostgreSQL 16 | Terraform, boto3, AWS Academy Learner Lab |
+| **Livrable** | Export statique (`frontend/out`) servi par S3 et CloudFront | API Node.js sur EC2 derrière un ALB, base sur RDS | Modules Terraform `network`, `security`, `compute` (puis `rds`, `s3`) |
+| **État** | Fonctionnel en local | Fonctionnel en local | Réseau, sécurité, bastion et backend de test déployables. ALB, ASG, RDS, S3 et CloudFront à venir |
+| **Documentation** | [`frontend/README.md`](frontend/README.md) | [`backend/README.md`](backend/README.md) | [`infra/README.md`](infra/README.md) |
+
+Où trouver quoi :
+
+- **Pages, captures d'écran, configuration de l'interface, build statique** : [frontend](frontend/README.md)
+- **Variables d'environnement, modules, règles métier, modèle de données, base de données, seed** : [backend](backend/README.md)
+- **VPC, groupes de sécurité, NAT, instances, coûts, destruction, dépannage** : [infra](infra/README.md)
+
+## Architecture globale
+
+```mermaid
+flowchart LR
+    U["Navigateur"]
+
+    subgraph FE["Frontend"]
+        CF["CloudFront + S3<br/>site statique Next.js"]
+    end
+
+    subgraph BE["Backend"]
+        ALB["Application Load Balancer"]
+        API["API NestJS<br/>instances EC2 privées, 2 zones"]
+    end
+
+    subgraph DATA["Données"]
+        RDS[("RDS PostgreSQL<br/>Multi-AZ")]
+        S3[("S3<br/>images des œuvres")]
+    end
+
+    STRIPE["Stripe"]
+
+    U --> CF
+    U -->|HTTPS| ALB
+    ALB --> API
+    API --> RDS
+    API --> S3
+    API --> STRIPE
+```
+
+- Le **frontend** est exporté en fichiers statiques et appelle l'API depuis le navigateur.
+- Le **backend** tourne sur des instances EC2 privées réparties sur deux zones de disponibilité, derrière un Application Load Balancer.
+- La **base** est une instance RDS PostgreSQL Multi-AZ, isolée dans des sous-réseaux privés. Les images envoyées par les artistes iront sur S3.
+- L'**infrastructure** est créée et détruite uniquement avec Terraform, jamais à la main dans la console AWS.
+
+Le réseau actuellement déployé (VPC, trois niveaux de sous-réseaux, NAT, groupes de sécurité) est détaillé et illustré dans [`infra/README.md`](infra/README.md#architecture).
+
+> **État d'avancement** : l'application (frontend, API, base, paiement) est fonctionnelle en local. En production, les images devront passer du disque du backend (`backend/uploads`) à S3, car les instances de l'Auto Scaling Group ne partagent pas de disque.
+
 ## Fonctionnalités
 
-**Pour tous les visiteurs**
-- Catalogue classé par catégorie, avec carrousels, œuvre à la une, recherche, filtre de prix et tri.
-- Fiche détaillée de chaque œuvre dans une fenêtre accessible au clavier.
-
-**Acheteur**
-- Demande d'achat avec message à l'artiste, suivi de ses demandes.
-- Paiement en ligne par carte et reçu imprimable.
-- Messagerie pour contacter les artistes.
-
-**Artiste**
-- Publication, modification et suppression de ses œuvres, avec envoi d'image.
-- Gestion des demandes d'achat : accepter, refuser ou annuler une réservation.
-- Contact direct des acheteurs et tableau de bord (œuvres, demandes, ventes, revenus).
-
-**Administrateur**
-- Statistiques, gestion des utilisateurs, des œuvres, des commandes et des catégories.
-- Contact de n'importe quel utilisateur.
-
-**Tous les comptes** : profil modifiable et changement de mot de passe.
-
-## Aperçu
-
-| Catalogue | Fiche d'une œuvre |
+| Profil | Ce qu'il peut faire |
 |---|---|
-| <img src="docs/screenshots/home.jpg" alt="Catalogue par catégorie"> | <img src="docs/screenshots/detail.jpg" alt="Fiche d'une œuvre et demande d'achat"> |
+| **Visiteur** | Parcourir le catalogue par catégorie, rechercher, filtrer par prix, trier, consulter la fiche d'une œuvre |
+| **Acheteur** | Demander l'achat d'une œuvre avec un message, suivre ses demandes, payer par carte, imprimer un reçu, écrire aux artistes |
+| **Artiste** | Publier, modifier et supprimer ses œuvres (avec image), accepter ou refuser les demandes, contacter les acheteurs, suivre ses ventes et revenus |
+| **Administrateur** | Statistiques, gestion des utilisateurs, des œuvres, des commandes et des catégories, contact de tout utilisateur |
+| **Tous les comptes** | Profil modifiable, changement de mot de passe |
 
-| Paiement par carte | Espace artiste |
-|---|---|
-| <img src="docs/screenshots/checkout.jpg" alt="Page de paiement"> | <img src="docs/screenshots/artist.jpg" alt="Demandes d'achat de l'artiste"> |
-
-| Administration | Messagerie |
-|---|---|
-| <img src="docs/screenshots/admin.jpg" alt="Statistiques de l'administrateur"> | <img src="docs/screenshots/messages.jpg" alt="Messagerie"> |
-
-| Inscription | Mobile |
-|---|---|
-| <img src="docs/screenshots/register.jpg" alt="Inscription avec choix du rôle"> | <img src="docs/screenshots/mobile.jpg" alt="Version mobile" width="260"> |
+Les pages correspondantes sont décrites dans [frontend](frontend/README.md#pages-par-rôle) et les règles métier dans [backend](backend/README.md#règles-métier).
 
 ## Rôles et permissions
 
@@ -89,32 +108,24 @@ Le rôle est choisi à l'inscription (acheteur ou artiste). Le compte administra
 | Modifier son profil et son mot de passe | | oui | oui | oui |
 | Statistiques, utilisateurs, catégories | | | | oui |
 
-Les règles de la messagerie sont détaillées dans le [README du backend](backend/README.md#messagerie).
+Les règles de la messagerie sont dans le [README du backend](backend/README.md#messagerie).
 
 ## Stack technique
 
 | Couche | Technologie | Détail |
 |---|---|---|
-| Frontend | Next.js 15 (App Router, export statique), React 19, TypeScript, CSS natif | [frontend/](frontend/README.md) |
-| Backend | NestJS 10, TypeORM, Passport JWT, class-validator, Multer, Stripe SDK | [backend/](backend/README.md) |
+| Frontend | Next.js 15 (App Router, export statique), React 19, TypeScript, CSS natif | [frontend/](frontend/README.md#stack) |
+| Backend | NestJS 10, TypeORM, Passport JWT, class-validator, Multer, Stripe SDK | [backend/](backend/README.md#stack) |
 | Base de données | PostgreSQL 16 (Docker en local, Amazon RDS en production) | [backend/](backend/README.md#modèle-de-données) |
-| Infrastructure | Terraform, scripts boto3, AWS Academy Learner Lab | [infra/](infra/README.md) |
+| Infrastructure | Terraform, scripts boto3, AWS Academy Learner Lab (`us-east-1`) | [infra/](infra/README.md) |
 | Outillage | npm, concurrently, Docker Compose, Adminer, Python 3 (seed) | |
-
-## Architecture cible
-
-Le frontend est exporté en fichiers statiques servis par S3 et CloudFront. L'API tourne sur des instances EC2 privées derrière un Application Load Balancer, sur deux zones de disponibilité. La base est une instance RDS PostgreSQL Multi-AZ, isolée dans des sous-réseaux privés.
-
-Le schéma, le réseau et l'état d'avancement du Terraform sont décrits dans [`infra/README.md`](infra/README.md).
-
-> **État d'avancement** : l'application (frontend, API, base, paiement) est fonctionnelle en local. L'infrastructure AWS est en cours de construction (réseau, sécurité, bastion et premier backend de test déjà déployables avec Terraform).
 
 ## Structure du dépôt
 
 ```
 art-gallery-aws/
 ├── frontend/        # Next.js            → frontend/README.md
-├── backend/         # NestJS + seed DB   → backend/README.md
+├── backend/         # NestJS             → backend/README.md
 ├── infra/           # Terraform (AWS)    → infra/README.md
 ├── scripts/         # seed de données, générateur d'images, scripts boto3
 ├── docs/            # schéma d'architecture, livrables, captures d'écran
@@ -125,6 +136,8 @@ art-gallery-aws/
 ```
 
 ## Démarrage rapide
+
+Cette section lance l'application en local (frontend, backend et base). Pour l'infrastructure AWS, suivez [`infra/README.md`](infra/README.md#usage).
 
 **Prérequis** : Node.js 20+, Docker, Python 3.9+ (pour le seed uniquement).
 
@@ -158,7 +171,7 @@ Ouvrez le site via `localhost` : une autre adresse est refusée par la politique
 
 > **Windows PowerShell 5** : l'opérateur `&&` n'est pas reconnu. Utilisez `;` ou lancez les commandes une par une. Remplacez `cp` par `Copy-Item` si besoin.
 
-Pour la configuration détaillée, voir [frontend](frontend/README.md#configuration) et [backend](backend/README.md#configuration). Pour mettre à jour une installation existante, voir [backend](backend/README.md#mise-à-jour-dune-installation-existante).
+Configuration détaillée : [frontend](frontend/README.md#configuration) et [backend](backend/README.md#configuration).
 
 ## Scripts
 
@@ -170,7 +183,7 @@ Pour la configuration détaillée, voir [frontend](frontend/README.md#configurat
 | `npm run db` | Démarre uniquement PostgreSQL et Adminer |
 | `npm run seed` | Injecte des données de test (options : [backend](backend/README.md#données-de-test)) |
 
-Par application : `npm run build` produit le backend (`backend/dist`) ou l'export statique du frontend (`frontend/out`).
+Par application : `npm run build` produit le backend (`backend/dist`) ou l'export statique du frontend (`frontend/out`). Les commandes Terraform sont dans [`infra/README.md`](infra/README.md#usage).
 
 ## Workflow Git
 
@@ -189,19 +202,23 @@ Par application : `npm run build` produit le backend (`backend/dist`) ou l'expor
 | `chore` | Outillage, configuration, dépendances |
 | `infra` | Terraform, scripts AWS |
 
-Ne committez jamais de fichier `.env`, de `node_modules`, d'état Terraform (`*.tfstate`) ni le contenu de `backend/uploads/` : le `.gitignore` les exclut.
+Ne committez jamais de fichier `.env`, de `node_modules`, d'état Terraform (`*.tfstate`), de clé `labsuser.pem` ni le contenu de `backend/uploads/` : le `.gitignore` les exclut.
+
+> Pour le Terraform, détruire l'infrastructure (`./destroy.sh`) à la fin de **chaque** session afin de maîtriser le coût (budget Learner Lab limité).
 
 ## Feuille de route
 
 Vue globale. Le détail de chaque partie est dans son README.
 
-**Application** (voir [backend](backend/README.md#feuille-de-route) et [frontend](frontend/README.md#feuille-de-route))
-- [x] Authentification JWT, trois rôles, CRUD des œuvres, commandes, paiement, messagerie, administration
-- [x] Interface responsive, seed de données
-- [ ] Migrations TypeORM, pagination, tests automatisés, CI
-- [ ] Notifications par e-mail, webhooks Stripe, messagerie temps réel
+**Frontend** ([détail](frontend/README.md#feuille-de-route))
+- [x] Catalogue, espaces par rôle, paiement, messagerie, interface responsive
+- [ ] Messagerie en temps réel, pagination, tests, déploiement S3 + CloudFront
 
-**Infrastructure** (voir [infra](infra/README.md#roadmap-future-work))
+**Backend** ([détail](backend/README.md#feuille-de-route))
+- [x] Authentification JWT, trois rôles, œuvres, commandes, paiement (démonstration et Stripe test), messagerie, administration, seed
+- [ ] Migrations TypeORM, images sur S3, e-mails, webhooks Stripe, pagination, tests et CI, documentation des routes
+
+**Infrastructure** ([détail](infra/README.md#roadmap-future-work))
 - [x] VPC, sous-réseaux multi-AZ, groupes de sécurité, NAT, bastion, premier backend, script de destruction
-- [ ] ALB, Auto Scaling Group, RDS Multi-AZ, S3 + CloudFront
-- [ ] Scripts boto3, CloudWatch, test de charge
+- [ ] ALB, Auto Scaling Group, RDS Multi-AZ, S3 et CloudFront, Secrets Manager
+- [ ] Scripts boto3, CloudWatch, état distant, test de charge k6
