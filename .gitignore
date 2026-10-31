@@ -19,5 +19,12 @@ next-env.d.ts
 *.tsbuildinfo
 !.env.local.example
 
-# Images envoyées par les artistes
+# Images envoyï¿½es par les artistes
 backend/uploads/*
+
+
+*.pem
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
