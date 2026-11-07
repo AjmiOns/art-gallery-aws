@@ -3,12 +3,26 @@
 ![Terraform](https://img.shields.io/badge/Terraform-planned-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
 
-Infrastructure as Code for the **Online Art Gallery** project (exhibition and sale of artworks online), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
+Infrastructure as Code for the **Online Art Gallery** project ([project overview](../README.md)), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
 
-- Application stack: PERN (PostgreSQL on Amazon RDS, Express, React, Node.js)
+- Application stack: Next.js static frontend ([`frontend/`](../frontend/README.md)), NestJS API ([`backend/`](../backend/README.md)), PostgreSQL on Amazon RDS
 - Deliverable covered by this folder: **L3** (VPC, multi-AZ subnets, security groups, first instance, outbound access, destroy script)
 
 > Rule of the course: nothing is built by hand in the AWS console. Everything is created and destroyed with Terraform.
+
+## Contents
+
+- [Architecture](#architecture)
+- [What is deployed today](#what-is-deployed-today-29-resources)
+- [Outbound access: justification](#outbound-access-justification)
+- [Project structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Usage](#usage)
+- [Cost](#cost)
+- [Non-functional objectives](#non-functional-objectives-from-l1)
+- [Roadmap](#roadmap-future-work)
+- [Security notes](#security-notes)
+- [Troubleshooting](#troubleshooting)
 
 ## Architecture
 
@@ -23,10 +37,12 @@ Internet Gateway
    |
 [Public subnet 1 | Public subnet 2]   Bastion, NAT Gateway
    |  (NAT = outbound only)
-[App subnet 1    | App subnet 2   ]   Backend (Node.js :3000)
+[App subnet 1    | App subnet 2   ]   Backend (Node.js)
    |  (port 5432 from app-sg only)
 [DB subnet 1     | DB subnet 2    ]   reserved for RDS PostgreSQL Multi-AZ
 ```
+
+**Target (see roadmap):** the frontend is exported as static files and served by S3 + CloudFront. The API runs on private EC2 instances in an Auto Scaling Group behind an Application Load Balancer, across two AZs. The database is an RDS PostgreSQL Multi-AZ instance in private subnets.
 
 ## What is deployed today (29 resources)
 
@@ -62,6 +78,8 @@ Internet Gateway
 
 Each tier trusts only the tier before it. Rules reference security groups, not IP addresses.
 
+> **Port to align:** `app-sg` and the test server use port `3000`, but the NestJS API listens on `3001` locally (`/api/health` is the planned ALB health check). Before deploying the real API, either set the app port to `3000` in the backend configuration or change the `app-sg` rule and the ALB target group to `3001`.
+
 ### Compute (`modules/compute`)
 
 | Instance | Subnet | Public IP | Role |
@@ -87,7 +105,7 @@ Known weakness: one NAT in AZ a means an AZ a failure cuts the outbound traffic 
 ## Project structure
 
 ```
-terraform/
+infra/
 |-- versions.tf                 provider + region + default tags
 |-- variables.tf                inputs and defaults
 |-- main.tf                     calls the 3 modules
@@ -101,7 +119,7 @@ terraform/
     `-- compute/                bastion + first backend
 ```
 
-Each module has `variables.tf` (inputs), `main.tf` (resources), `outputs.tf` (outputs).
+Each module has `variables.tf` (inputs), `main.tf` (resources), `outputs.tf` (outputs). The `rds` and `s3` modules are planned (see roadmap).
 
 ## Prerequisites
 
@@ -111,6 +129,8 @@ Each module has `variables.tf` (inputs), `main.tf` (resources), `outputs.tf` (ou
 - The Learner Lab key `labsuser.pem` (`chmod 400 labsuser.pem`)
 
 ## Usage
+
+All commands are run from the `infra/` folder.
 
 ### 1. Credentials (every lab session)
 
@@ -261,15 +281,18 @@ About **0.08-0.10 USD per hour**. A forgotten week costs about 35% of the 50 USD
 - [x] NAT Gateway outbound access + S3 gateway endpoint
 - [x] Bastion + first backend instance
 - [x] Destroy script with leftover check
-- [ ] Application Load Balancer (public subnets)
+- [ ] Application Load Balancer (public subnets), health check `GET /api/health`
 - [ ] Launch Template + Auto Scaling Group (min 2, one per AZ)
 - [ ] RDS PostgreSQL Multi-AZ with automated backups (5-minute RPO)
-- [ ] S3 bucket for artwork images
+- [ ] S3 bucket for artwork images (presigned URLs, see [backend](../backend/README.md#déploiement))
+- [ ] S3 bucket + CloudFront for the static frontend (`frontend/out`, see [frontend](../frontend/README.md#build-et-déploiement))
+- [ ] Secrets Manager for `JWT_SECRET`, `ADMIN_PASSWORD`, RDS password, Stripe key
 - [ ] CloudWatch logs, metrics and alarms
-- [ ] Deploy the React + Node.js application
+- [ ] Deploy the Next.js export and the NestJS API
 - [ ] Remote state in S3 (team collaboration)
 - [ ] k6 load test and full rebuild-time measurement
-- [ ] Architecture diagram version 2 (with ALB, ASG, RDS)
+- [ ] boto3 scripts (RDS snapshot and restore, resilience test, cost report)
+- [ ] Architecture diagram version 2 (with ALB, ASG, RDS, CloudFront)
 
 ## Security notes
 
