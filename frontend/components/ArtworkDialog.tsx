@@ -6,6 +6,7 @@ import { api, Artwork, Order } from '@/lib/api';
 import { formatDate, formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
 import Avatar from './Avatar';
+import PlanBadge from './PlanBadge';
 import { useAuth } from './AuthProvider';
 import { useCategories } from './CategoriesProvider';
 import { useToast } from './Toast';
@@ -104,6 +105,7 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
             <p className="dialog__artist">
               <Avatar name={artwork.owner?.username ?? 'Artiste'} size={32} />
               {artwork.owner?.username ?? 'Artiste'}
+              <PlanBadge plan={artwork.owner?.plan} />
             </p>
             <p className="dialog__price">{formatPrice(artwork.price)}</p>
             <p className="dialog__date">Mise en ligne le {formatDate(artwork.createdAt)}</p>

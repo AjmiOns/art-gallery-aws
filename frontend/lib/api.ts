@@ -7,6 +7,9 @@ export type Role = 'admin' | 'artist' | 'buyer';
 export type ArtworkStatus = 'available' | 'reserved' | 'sold';
 export type OrderStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'paid';
 
+export type PlanId = 'free' | 'premium' | 'pro';
+export type Billing = 'monthly' | 'yearly';
+
 export type SessionUser = { id: string; email: string; username: string; role: Role };
 export type Session = { accessToken: string; user: SessionUser };
 export type UserProfile = SessionUser & {
@@ -15,13 +18,15 @@ export type UserProfile = SessionUser & {
 
 export type Artwork = {
   id: string; title: string; imageUrl: string; tags: string[]; price: number; status: ArtworkStatus;
-  ownerId: string; owner?: { id: string; username: string }; createdAt: string;
+  ownerId: string; owner?: { id: string; username: string; plan?: PlanId }; createdAt: string;
 };
 
 export type Order = {
   id: string; status: OrderStatus; amount: number; message: string | null; paidAt: string | null; createdAt: string;
   artwork: Pick<Artwork, 'id' | 'title' | 'imageUrl' | 'price' | 'status' | 'tags'>;
   buyer: { id: string; username: string }; seller: { id: string; username: string };
+  // Visibles uniquement par l'artiste vendeur et les administrateurs, une fois la commande payée
+  commissionRate?: number | null; commissionAmount?: number | null; netAmount?: number | null;
   payment?: { id: string; provider: string; cardBrand: string | null; cardLast4: string | null; currency: string; paidAt: string } | null;
 };
 
@@ -29,6 +34,29 @@ export type PaymentConfig = { provider: 'mock' | 'stripe'; currency: string; tes
 export type Receipt = {
   paymentId: string; orderId: string; status: string; amount: number; currency: string; provider: string;
   cardBrand: string | null; cardLast4: string | null; paidAt: string;
+};
+
+export type Plan = {
+  id: PlanId; name: string; tagline: string; monthlyPrice: number; yearlyPrice: number;
+  commissionRate: number; maxArtworks: number | null; perks: string[];
+};
+export type PlanCatalog = { currency: string; plans: Plan[] };
+export type SubscriptionInvoice = {
+  id: string; plan: PlanId; billing: Billing; amount: number; currency: string; provider: string;
+  cardBrand: string | null; cardLast4: string | null; startsAt: string | null; endsAt: string | null; paidAt: string | null;
+};
+export type MySubscription = {
+  plan: Plan; billing: Billing | null; expiresAt: string | null; expired: boolean;
+  usage: { online: number; max: number | null };
+  sales: { count: number; gross: number; commission: number; net: number };
+  history: SubscriptionInvoice[];
+};
+export type SubscriptionCheckout = {
+  provider: 'mock' | 'stripe'; subscriptionId: string; url?: string; amount?: number; currency?: string; plan: PlanId; billing: Billing;
+};
+export type SubscriptionReceipt = {
+  subscriptionId: string; status: string; plan: PlanId; billing: Billing; amount: number; currency: string; provider: string;
+  cardBrand: string | null; cardLast4: string | null; startsAt: string; endsAt: string; paidAt: string;
 };
 
 export type Thread = { userId: string; username: string; role: Role; lastMessage: string; lastAt: string; lastFromMe: boolean; unread: number };
@@ -40,6 +68,8 @@ export type Stats = {
   artworks: { total: number; available: number; reserved: number; sold: number };
   orders: { total: number; pending: number; accepted: number; rejected: number; cancelled: number; paid: number };
   revenue: { total: number; last30: number; payments: number };
+  platform: { commissions: number; commissionsLast30: number; subscriptions: number; subscriptionsLast30: number };
+  plans: { free: number; premium: number; pro: number };
   byCategory: { slug: string; label: string; tone: string; artworks: number; sold: number; revenue: number }[];
   daily: { date: string; sales: number; revenue: number }[];
   topArtists: { id: string; username: string; sales: number; revenue: number }[];
@@ -122,6 +152,17 @@ export const api = {
     request<Receipt>('/payments/mock/confirm', { method: 'POST', body, token }),
   confirmStripe: (sessionId: string, token: string) =>
     request<Receipt>('/payments/stripe/confirm', { method: 'POST', body: { sessionId }, token }),
+
+  // abonnements artiste
+  plans: () => request<PlanCatalog>('/subscriptions/plans'),
+  mySubscription: (token: string) => request<MySubscription>('/subscriptions/me', { token }),
+  subscribe: (plan: PlanId, billing: Billing, token: string) =>
+    request<SubscriptionCheckout>('/subscriptions/checkout', { method: 'POST', body: { plan, billing }, token }),
+  confirmSubscriptionMock: (body: { subscriptionId: string; cardNumber: string; expiry: string; cvc: string; holder: string }, token: string) =>
+    request<SubscriptionReceipt>('/subscriptions/mock/confirm', { method: 'POST', body, token }),
+  confirmSubscriptionStripe: (sessionId: string, token: string) =>
+    request<SubscriptionReceipt>('/subscriptions/stripe/confirm', { method: 'POST', body: { sessionId }, token }),
+  cancelSubscription: (token: string) => request<MySubscription>('/subscriptions/cancel', { method: 'POST', token }),
 
   // messagerie
   threads: (token: string) => request<Thread[]>('/messages/threads', { token }),

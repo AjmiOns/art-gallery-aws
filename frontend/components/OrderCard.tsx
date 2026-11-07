@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { Order } from '@/lib/api';
-import { formatPrice, formatShortDate } from '@/lib/format';
+import { formatPercent, formatPrice, formatShortDate } from '@/lib/format';
 import ArtImage from './ArtImage';
 import StatusBadge from './StatusBadge';
 
@@ -26,6 +26,11 @@ export default function OrderCard({ order, perspective, busy, onAction }: Props)
         <p className="muted">
           {seller ? 'Acheteur' : 'Artiste'} : <strong>{other.username}</strong> · {formatShortDate(order.createdAt)}
         </p>
+        {seller && order.status === 'paid' && order.commissionAmount != null && (
+          <p className="order__fees">
+            Commission {formatPercent(order.commissionRate ?? 0)} : − {formatPrice(order.commissionAmount)} · <strong>Net perçu : {formatPrice(order.netAmount ?? order.amount)}</strong>
+          </p>
+        )}
         {order.message && <blockquote className="order__note">« {order.message} »</blockquote>}
       </div>
       <div className="order__side">

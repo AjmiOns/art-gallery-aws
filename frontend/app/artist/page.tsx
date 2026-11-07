@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Artwork, Order } from '@/lib/api';
 import { formatPrice } from '@/lib/format';
 import ArtImage from '@/components/ArtImage';
@@ -12,6 +13,7 @@ import Modal from '@/components/Modal';
 import OrderCard from '@/components/OrderCard';
 import RequireRole from '@/components/RequireRole';
 import StatusBadge from '@/components/StatusBadge';
+import SubscriptionPanel from '@/components/SubscriptionPanel';
 import Tabs from '@/components/Tabs';
 import { useToast } from '@/components/Toast';
 
@@ -19,7 +21,8 @@ function Dashboard() {
   const { token } = useAuth();
   const { categoryOf } = useCategories();
   const toast = useToast();
-  const [tab, setTab] = useState('artworks');
+  const params = useSearchParams();
+  const [tab, setTab] = useState(params.get('tab') === 'subscription' ? 'subscription' : 'artworks');
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +50,10 @@ function Dashboard() {
     waiting: orders.filter((o) => o.status === 'accepted'),
     history: orders.filter((o) => ['paid', 'rejected', 'cancelled'].includes(o.status)),
   }), [orders]);
-  const revenue = orders.filter((o) => o.status === 'paid').reduce((s, o) => s + Number(o.amount), 0);
+  const paid = orders.filter((o) => o.status === 'paid');
+  // Ventes antérieures aux commissions : pas de net enregistré, l'artiste a perçu le montant entier.
+  const revenue = paid.reduce((s, o) => s + Number(o.netAmount ?? o.amount), 0);
+  const commissions = paid.reduce((s, o) => s + Number(o.commissionAmount ?? 0), 0);
 
   async function onAction(id: string, action: 'accept' | 'reject' | 'cancel') {
     if (!token) return;
@@ -88,11 +94,11 @@ function Dashboard() {
         <div className="kpi"><span>Œuvres publiées</span><strong>{artworks.length}</strong></div>
         <div className="kpi"><span>Demandes à traiter</span><strong>{groups.todo.length}</strong></div>
         <div className="kpi"><span>Œuvres vendues</span><strong>{artworks.filter((a) => a.status === 'sold').length}</strong></div>
-        <div className="kpi"><span>Revenus</span><strong>{formatPrice(revenue)}</strong></div>
+        <div className="kpi"><span>Revenus nets</span><strong>{formatPrice(revenue)}</strong>{commissions > 0 && <small>après {formatPrice(commissions)} de commission</small>}</div>
       </div>
 
       <Tabs
-        items={[{ id: 'artworks', label: 'Mes œuvres' }, { id: 'requests', label: "Demandes d'achat", badge: groups.todo.length }]}
+        items={[{ id: 'artworks', label: 'Mes œuvres' }, { id: 'requests', label: "Demandes d'achat", badge: groups.todo.length }, { id: 'subscription', label: 'Abonnement' }]}
         active={tab}
         onChange={setTab}
       />
@@ -134,6 +140,8 @@ function Dashboard() {
         )
       )}
 
+      {tab === 'subscription' && <SubscriptionPanel />}
+
       {tab === 'requests' && !loading && (
         orders.length === 0 ? (
           <div className="state"><p>Aucune demande d&apos;achat pour le moment.</p></div>
@@ -167,7 +175,9 @@ function Dashboard() {
 export default function ArtistPage() {
   return (
     <RequireRole roles={['artist']}>
-      <Dashboard />
+      <Suspense fallback={null}>
+        <Dashboard />
+      </Suspense>
     </RequireRole>
   );
 }

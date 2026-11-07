@@ -47,6 +47,18 @@ export class Order {
   @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
   paidAt: Date | null;
 
+  // Commission de la plateforme, figée au paiement (null tant que la commande n'est pas payée,
+  // et pour les ventes antérieures à l'introduction des commissions).
+  @Column({ name: 'commission_rate', type: 'numeric', precision: 5, scale: 4, nullable: true, transformer: decimalTransformer })
+  commissionRate: number | null;
+
+  @Column({ name: 'commission_amount', type: 'numeric', precision: 10, scale: 2, nullable: true, transformer: decimalTransformer })
+  commissionAmount: number | null;
+
+  // Montant reversé à l'artiste = amount - commissionAmount
+  @Column({ name: 'net_amount', type: 'numeric', precision: 10, scale: 2, nullable: true, transformer: decimalTransformer })
+  netAmount: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
