@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { CategoriesProvider } from '@/components/CategoriesProvider';
+import { LangBoundary, LanguageProvider } from '@/components/LanguageProvider';
 import { ThemeProvider, THEME_INIT_SCRIPT } from '@/components/ThemeProvider';
 import { ToastProvider } from '@/components/Toast';
 import Header from '@/components/Header';
@@ -26,15 +27,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <AuthProvider>
-            <CategoriesProvider>
-              <ToastProvider>
-                <Header />
-                <main>{children}</main>
-                <Footer />
-              </ToastProvider>
-            </CategoriesProvider>
-          </AuthProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <CategoriesProvider>
+                <ToastProvider>
+                  <LangBoundary>
+                    <Header />
+                    <main>{children}</main>
+                    <Footer />
+                  </LangBoundary>
+                </ToastProvider>
+              </CategoriesProvider>
+            </AuthProvider>
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

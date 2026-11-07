@@ -6,6 +6,7 @@ import AdminCategories from '@/components/admin/AdminCategories';
 import AdminOrders from '@/components/admin/AdminOrders';
 import AdminStats from '@/components/admin/AdminStats';
 import AdminUsers from '@/components/admin/AdminUsers';
+import { useI18n } from '@/components/LanguageProvider';
 import RequireRole from '@/components/RequireRole';
 import Tabs from '@/components/Tabs';
 
@@ -18,14 +19,15 @@ const TABS = [
 ];
 
 export default function AdminPage() {
+  const { t } = useI18n();
   const [tab, setTab] = useState('stats');
   return (
     <RequireRole roles={['admin']}>
       <div className="page page--wide">
         <header className="page-head">
           <div>
-            <h1>Administration</h1>
-            <p className="muted">Pilotez la galerie : utilisateurs, œuvres, commandes et catégories.</p>
+            <h1>{t('Administration')}</h1>
+            <p className="muted">{t('Pilotez la galerie : utilisateurs, œuvres, commandes et catégories.')}</p>
           </div>
         </header>
         <Tabs items={TABS} active={tab} onChange={setTab} />

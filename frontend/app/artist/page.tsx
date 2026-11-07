@@ -9,6 +9,7 @@ import ArtImage from '@/components/ArtImage';
 import ArtworkForm from '@/components/ArtworkForm';
 import { useAuth } from '@/components/AuthProvider';
 import { useCategories } from '@/components/CategoriesProvider';
+import { useI18n } from '@/components/LanguageProvider';
 import Modal from '@/components/Modal';
 import OrderCard from '@/components/OrderCard';
 import RequireRole from '@/components/RequireRole';
@@ -21,6 +22,7 @@ function Dashboard() {
   const { token } = useAuth();
   const { categoryOf } = useCategories();
   const toast = useToast();
+  const { t } = useI18n();
   const params = useSearchParams();
   const [tab, setTab] = useState(params.get('tab') === 'subscription' ? 'subscription' : 'artworks');
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -60,7 +62,7 @@ function Dashboard() {
     setBusyId(id);
     try {
       await api.orderAction(id, action, token);
-      toast.show(action === 'accept' ? 'Demande acceptée : l’acheteur peut payer.' : action === 'reject' ? 'Demande refusée.' : 'Réservation annulée.');
+      toast.show(action === 'accept' ? t('Demande acceptée : l’acheteur peut payer.') : action === 'reject' ? t('Demande refusée.') : t('Réservation annulée.'));
       await load();
     } catch (e) {
       toast.show((e as Error).message, 'error');
@@ -70,10 +72,10 @@ function Dashboard() {
   }
 
   async function remove(a: Artwork) {
-    if (!token || !window.confirm(`Supprimer « ${a.title} » ? Cette action est définitive.`)) return;
+    if (!token || !window.confirm(t('Supprimer « {title} » ? Cette action est définitive.', { title: a.title }))) return;
     try {
       await api.deleteArtwork(a.id, token);
-      toast.show('Œuvre supprimée.');
+      toast.show(t('Œuvre supprimée.'));
       await load();
     } catch (e) {
       toast.show((e as Error).message, 'error');
@@ -84,17 +86,17 @@ function Dashboard() {
     <div className="page page--wide">
       <header className="page-head">
         <div>
-          <h1>Espace artiste</h1>
-          <p className="muted">Gérez vos œuvres et répondez aux demandes d&apos;achat.</p>
+          <h1>{t('Espace artiste')}</h1>
+          <p className="muted">{t("Gérez vos œuvres et répondez aux demandes d'achat.")}</p>
         </div>
-        <Link href="/sell" className="btn btn--primary">Publier une œuvre</Link>
+        <Link href="/sell" className="btn btn--primary">{t('Publier une œuvre')}</Link>
       </header>
 
       <div className="kpis">
-        <div className="kpi"><span>Œuvres publiées</span><strong>{artworks.length}</strong></div>
-        <div className="kpi"><span>Demandes à traiter</span><strong>{groups.todo.length}</strong></div>
-        <div className="kpi"><span>Œuvres vendues</span><strong>{artworks.filter((a) => a.status === 'sold').length}</strong></div>
-        <div className="kpi"><span>Revenus nets</span><strong>{formatPrice(revenue)}</strong>{commissions > 0 && <small>après {formatPrice(commissions)} de commission</small>}</div>
+        <div className="kpi"><span>{t('Œuvres publiées')}</span><strong>{artworks.length}</strong></div>
+        <div className="kpi"><span>{t('Demandes à traiter')}</span><strong>{groups.todo.length}</strong></div>
+        <div className="kpi"><span>{t('Œuvres vendues')}</span><strong>{artworks.filter((a) => a.status === 'sold').length}</strong></div>
+        <div className="kpi"><span>{t('Revenus nets')}</span><strong>{formatPrice(revenue)}</strong>{commissions > 0 && <small>{t('après {amount} de commission', { amount: formatPrice(commissions) })}</small>}</div>
       </div>
 
       <Tabs
@@ -104,18 +106,18 @@ function Dashboard() {
       />
 
       {error && <p className="form-error" role="alert">{error}</p>}
-      {loading && <p className="muted">Chargement…</p>}
+      {loading && <p className="muted">{t('Chargement…')}</p>}
 
       {tab === 'artworks' && !loading && (
         artworks.length === 0 ? (
           <div className="state">
-            <p>Vous n&apos;avez pas encore publié d&apos;œuvre.</p>
-            <Link href="/sell" className="btn btn--primary btn--sm">Publier ma première œuvre</Link>
+            <p>{t("Vous n'avez pas encore publié d'œuvre.")}</p>
+            <Link href="/sell" className="btn btn--primary btn--sm">{t('Publier ma première œuvre')}</Link>
           </div>
         ) : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Œuvre</th><th>Catégorie</th><th>Prix</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th>{t('Œuvre')}</th><th>{t('Catégorie')}</th><th>{t('Prix')}</th><th>{t('Statut')}</th><th><span className="sr-only">{t('Actions')}</span></th></tr></thead>
               <tbody>
                 {artworks.map((a) => (
                   <tr key={a.id}>
@@ -129,8 +131,8 @@ function Dashboard() {
                     <td>{formatPrice(a.price)}</td>
                     <td><StatusBadge status={a.status} /></td>
                     <td className="cell-actions">
-                      <button type="button" className="btn btn--soft btn--sm" onClick={() => setEditing(a)}>Modifier</button>
-                      <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => remove(a)}>Supprimer</button>
+                      <button type="button" className="btn btn--soft btn--sm" onClick={() => setEditing(a)}>{t('Modifier')}</button>
+                      <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => remove(a)}>{t('Supprimer')}</button>
                     </td>
                   </tr>
                 ))}
@@ -144,13 +146,13 @@ function Dashboard() {
 
       {tab === 'requests' && !loading && (
         orders.length === 0 ? (
-          <div className="state"><p>Aucune demande d&apos;achat pour le moment.</p></div>
+          <div className="state"><p>{t("Aucune demande d'achat pour le moment.")}</p></div>
         ) : (
           <>
             {([['todo', 'À traiter'], ['waiting', 'Acceptées, en attente de paiement'], ['history', 'Historique']] as const).map(([key, label]) =>
               groups[key].length > 0 && (
                 <section key={key} className="order-group">
-                  <h2>{label} <span className="count">{groups[key].length}</span></h2>
+                  <h2>{t(label)} <span className="count">{groups[key].length}</span></h2>
                   {groups[key].map((o) => <OrderCard key={o.id} order={o} perspective="seller" busy={busyId === o.id} onAction={onAction} />)}
                 </section>
               ),
@@ -159,12 +161,12 @@ function Dashboard() {
         )
       )}
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Modifier l'œuvre" wide>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={t("Modifier l'œuvre")} wide>
         {editing && (
           <ArtworkForm
             initial={editing}
             onCancel={() => setEditing(null)}
-            onSaved={() => { toast.show('Œuvre mise à jour.'); setEditing(null); load(); }}
+            onSaved={() => { toast.show(t('Œuvre mise à jour.')); setEditing(null); load(); }}
           />
         )}
       </Modal>

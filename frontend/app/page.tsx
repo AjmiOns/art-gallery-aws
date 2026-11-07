@@ -8,6 +8,7 @@ import ArtworkDialog from '@/components/ArtworkDialog';
 import { useCategories } from '@/components/CategoriesProvider';
 import FilterBar, { MAX_PRICE, SortKey } from '@/components/FilterBar';
 import Hero from '@/components/Hero';
+import { useI18n } from '@/components/LanguageProvider';
 
 function SkeletonShelf() {
   return (
@@ -24,6 +25,7 @@ function SkeletonShelf() {
 
 export default function HomePage() {
   const { categories, categoryOf } = useCategories();
+  const { t } = useI18n();
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
   const [maxPrice, setMaxPrice] = useState(MAX_PRICE);
@@ -71,7 +73,7 @@ export default function HomePage() {
         {error && (
           <div className="state state--error" role="alert">
             <p>{error}</p>
-            <button type="button" className="btn btn--primary btn--sm" onClick={refetch}>Réessayer</button>
+            <button type="button" className="btn btn--primary btn--sm" onClick={refetch}>{t('Réessayer')}</button>
           </div>
         )}
 
@@ -84,9 +86,9 @@ export default function HomePage() {
 
         {!loading && !error && shelves.length === 0 && (
           <div className="state">
-            <p>Aucune œuvre ne correspond à votre recherche.</p>
+            <p>{t('Aucune œuvre ne correspond à votre recherche.')}</p>
             {filtersActive && (
-              <button type="button" className="btn btn--soft btn--sm" onClick={reset}>Effacer les filtres</button>
+              <button type="button" className="btn btn--soft btn--sm" onClick={reset}>{t('Effacer les filtres')}</button>
             )}
           </div>
         )}

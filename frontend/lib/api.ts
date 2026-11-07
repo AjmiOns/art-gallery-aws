@@ -1,4 +1,5 @@
 import type { Category } from './categories';
+import { getActiveLang, translateServer, tr } from './i18n';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 export const CURRENCY = process.env.NEXT_PUBLIC_CURRENCY ?? 'TND';
@@ -93,14 +94,14 @@ async function request<T>(path: string, { method = 'GET', body, token, form }: O
       body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
     });
   } catch {
-    throw new Error("Impossible de joindre le serveur. Vérifiez que l'API est démarrée.");
+    throw new Error(tr("Impossible de joindre le serveur. Vérifiez que l'API est démarrée."));
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     // Jeton expiré ou compte suspendu : l'application déconnecte l'utilisateur.
     if (res.status === 401 && token) window.dispatchEvent(new Event('auth:expired'));
     const message = Array.isArray(data?.message) ? data.message.join(', ') : data?.message;
-    throw new Error(message ?? 'Une erreur est survenue.');
+    throw new Error(message ? translateServer(getActiveLang(), message) : tr('Une erreur est survenue.'));
   }
   return data as T;
 }

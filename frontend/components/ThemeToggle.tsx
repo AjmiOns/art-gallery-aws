@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useI18n } from './LanguageProvider';
 import { useTheme } from './ThemeProvider';
 
 const Sun = () => (
@@ -18,10 +19,11 @@ const Moon = () => (
 // Bouton de bascule clair / sombre. Il est inactif jusqu'au montage pour éviter un écart d'hydratation.
 export default function ThemeToggle() {
   const { theme, toggle } = useTheme();
+  const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const dark = mounted && theme === 'dark';
-  const label = dark ? 'Passer au mode clair' : 'Passer au mode sombre';
+  const label = dark ? t('Passer au mode clair') : t('Passer au mode sombre');
   return (
     <button type="button" className="round theme-toggle" onClick={toggle} aria-label={label} title={label} aria-pressed={dark}>
       {dark ? <Sun /> : <Moon />}

@@ -6,20 +6,22 @@ import ArtImage from './ArtImage';
 import Avatar from './Avatar';
 import PlanBadge from './PlanBadge';
 import { useCategories } from './CategoriesProvider';
+import { useI18n } from './LanguageProvider';
 
 export default function ArtworkCard({ artwork, onOpen }: { artwork: Artwork; onOpen: (a: Artwork) => void }) {
   const { categoryOf } = useCategories();
+  const { t } = useI18n();
   const cat = categoryOf(artwork.tags);
-  const artist = artwork.owner?.username ?? 'Artiste';
+  const artist = artwork.owner?.username ?? t('Artiste');
   const unavailable = artwork.status !== 'available';
-  const badge = artwork.status === 'sold' ? 'Vendue' : artwork.status === 'reserved' ? 'Réservée' : null;
+  const badge = artwork.status === 'sold' ? t('Vendue') : artwork.status === 'reserved' ? t('Réservée') : null;
   return (
     <button
       type="button"
       className={`card${artwork.status === 'sold' ? ' card--sold' : ''}`}
       data-tone={cat.tone}
       onClick={() => onOpen(artwork)}
-      aria-label={`${artwork.title}, par ${artist}, ${formatPrice(artwork.price)}${badge ? `, ${badge.toLowerCase()}` : ''}`}
+      aria-label={`${artwork.title}, ${t('par {artist}', { artist })}, ${formatPrice(artwork.price)}${badge ? `, ${badge.toLowerCase()}` : ''}`}
     >
       <span className="card__media">
         <ArtImage src={artwork.imageUrl} alt="" />
