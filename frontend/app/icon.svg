@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Galerie d'art</title>
+  <defs><clipPath id="c"><circle cx="32" cy="32" r="32"/></clipPath></defs>
+  <g clip-path="url(#c)">
+    <path d="M32 32 L21.06 62.07 A32 32 0 0 1 0.02 30.88 Z" fill="#ffb4d6"/>
+    <path d="M32 32 L0.02 30.88 A32 32 0 0 1 23.18 1.24 Z" fill="#c8b6ff"/>
+    <path d="M32 32 L23.18 1.24 A32 32 0 0 1 58.53 14.11 Z" fill="#a8d8ff"/>
+    <path d="M32 32 L58.53 14.11 A32 32 0 0 1 57.22 51.70 Z" fill="#b5ecd2"/>
+    <path d="M32 32 L57.22 51.70 A32 32 0 0 1 21.06 62.07 Z" fill="#ffd6a8"/>
+  </g>
+  <circle cx="32" cy="32" r="28" fill="none" stroke="#ffffff" stroke-opacity="0.65" stroke-width="6"/>
+</svg>
