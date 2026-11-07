@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthProvider';
+import LanguageSwitch from './LanguageSwitch';
+import { useI18n } from './LanguageProvider';
 
 const SAMPLES = ['/artworks/painting/painting-08.jpg', '/artworks/digital/digital-13.jpg', '/artworks/wall-art/wall-art-02.jpg'];
 const HOME = { admin: '/admin', artist: '/artist', buyer: '/' } as const;
 
 export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { user, ready, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -46,14 +49,14 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       <div className="auth__aside">
         <Link href="/" className="brand brand--light">
           <span className="brand__mark" aria-hidden="true" />
-          Galerie d&apos;art
+          {t("Galerie d'art")}
         </Link>
         <div className="auth__pitch">
-          <h1>{isLogin ? 'Content de vous revoir.' : 'Rejoignez la galerie.'}</h1>
+          <h1>{isLogin ? t('Content de vous revoir.') : t('Rejoignez la galerie.')}</h1>
           <p>
             {isLogin
-              ? 'Retrouvez vos œuvres, vos demandes d’achat et vos messages.'
-              : 'Achetez des œuvres uniques ou publiez vos créations et vendez-les à une communauté de passionnés.'}
+              ? t('Retrouvez vos œuvres, vos demandes d’achat et vos messages.')
+              : t('Achetez des œuvres uniques ou publiez vos créations et vendez-les à une communauté de passionnés.')}
           </p>
           <div className="auth__thumbs" aria-hidden="true">
             {SAMPLES.map((src, i) => (
@@ -66,45 +69,45 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
 
       <div className="auth__panel">
         <form className="auth__card" onSubmit={submit}>
-          <div className="tabs" role="tablist" aria-label="Connexion ou inscription">
-            <Link href="/login" role="tab" aria-selected={isLogin} className={isLogin ? 'is-active' : ''}>Connexion</Link>
-            <Link href="/register" role="tab" aria-selected={!isLogin} className={!isLogin ? 'is-active' : ''}>Inscription</Link>
+          <div className="tabs" role="tablist" aria-label={t('Connexion ou inscription')}>
+            <Link href="/login" role="tab" aria-selected={isLogin} className={isLogin ? 'is-active' : ''}>{t('Connexion')}</Link>
+            <Link href="/register" role="tab" aria-selected={!isLogin} className={!isLogin ? 'is-active' : ''}>{t('Inscription')}</Link>
           </div>
 
-          <h2>{isLogin ? 'Se connecter' : 'Créer un compte'}</h2>
+          <h2>{isLogin ? t('Se connecter') : t('Créer un compte')}</h2>
 
           {!isLogin && (
             <fieldset className="field">
-              <legend>Je suis</legend>
+              <legend>{t('Je suis')}</legend>
               <div className="role-pick">
                 <label className={role === 'buyer' ? 'is-active' : ''}>
                   <input type="radio" name="role" value="buyer" checked={role === 'buyer'} onChange={() => setRole('buyer')} />
-                  <strong>Acheteur</strong>
-                  <span>Je découvre et j&apos;achète des œuvres</span>
+                  <strong>{t('Acheteur')}</strong>
+                  <span>{t("Je découvre et j'achète des œuvres")}</span>
                 </label>
                 <label className={role === 'artist' ? 'is-active' : ''}>
                   <input type="radio" name="role" value="artist" checked={role === 'artist'} onChange={() => setRole('artist')} />
-                  <strong>Artiste</strong>
-                  <span>Je publie et je vends mes créations</span>
+                  <strong>{t('Artiste')}</strong>
+                  <span>{t('Je publie et je vends mes créations')}</span>
                 </label>
               </div>
             </fieldset>
           )}
 
           <label className="field">
-            <span>Adresse e-mail</span>
-            <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.com" />
+            <span>{t('Adresse e-mail')}</span>
+            <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('vous@exemple.com')} />
           </label>
 
           {!isLogin && (
             <label className="field">
-              <span>{role === 'artist' ? "Nom d'artiste" : 'Nom affiché'}</span>
-              <input required minLength={2} autoComplete="nickname" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={role === 'artist' ? 'Comment vous signez vos œuvres' : 'Votre nom'} />
+              <span>{role === 'artist' ? t("Nom d'artiste") : t('Nom affiché')}</span>
+              <input required minLength={2} autoComplete="nickname" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={role === 'artist' ? t('Comment vous signez vos œuvres') : t('Votre nom')} />
             </label>
           )}
 
           <label className="field">
-            <span>Mot de passe</span>
+            <span>{t('Mot de passe')}</span>
             <div className="field__password">
               <input
                 type={show ? 'text' : 'password'}
@@ -113,22 +116,23 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
                 autoComplete={isLogin ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="8 caractères minimum"
+                placeholder={t('8 caractères minimum')}
               />
-              <button type="button" onClick={() => setShow((s) => !s)} aria-pressed={show}>{show ? 'Masquer' : 'Afficher'}</button>
+              <button type="button" onClick={() => setShow((s) => !s)} aria-pressed={show}>{show ? t('Masquer') : t('Afficher')}</button>
             </div>
           </label>
 
           {error && <p className="form-error" role="alert">{error}</p>}
 
           <button type="submit" className="btn btn--primary btn--block" disabled={busy}>
-            {busy ? (isLogin ? 'Connexion…' : 'Création du compte…') : isLogin ? 'Se connecter' : 'Créer mon compte'}
+            {busy ? (isLogin ? t('Connexion…') : t('Création du compte…')) : isLogin ? t('Se connecter') : t('Créer mon compte')}
           </button>
 
           <p className="auth__switch">
-            {isLogin ? 'Pas encore de compte ?' : 'Déjà inscrit ?'}{' '}
-            <Link href={isLogin ? '/register' : '/login'}>{isLogin ? 'Créer un compte' : 'Se connecter'}</Link>
+            {isLogin ? t('Pas encore de compte ?') : t('Déjà inscrit ?')}{' '}
+            <Link href={isLogin ? '/register' : '/login'}>{isLogin ? t('Créer un compte') : t('Se connecter')}</Link>
           </p>
+          <LanguageSwitch />
         </form>
       </div>
     </div>

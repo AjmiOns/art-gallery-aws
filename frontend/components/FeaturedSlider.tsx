@@ -5,9 +5,11 @@ import type { Artwork } from '@/lib/api';
 import { formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
 import { useCategories } from './CategoriesProvider';
+import { useI18n } from './LanguageProvider';
 
 export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; onOpen: (a: Artwork) => void }) {
   const { categoryOf } = useCategories();
+  const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const count = slides.length;
@@ -30,8 +32,8 @@ export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; 
     <div
       className="slider"
       role="group"
-      aria-roledescription="carrousel"
-      aria-label="Œuvres à la une"
+      aria-roledescription={t('carrousel')}
+      aria-label={t('Œuvres à la une')}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -47,10 +49,10 @@ export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; 
               data-tone={cat.tone}
               aria-hidden={i !== index}
               role="group"
-              aria-roledescription="diapositive"
-              aria-label={`${i + 1} sur ${count}`}
+              aria-roledescription={t('diapositive')}
+              aria-label={t('{i} sur {n}', { i: i + 1, n: count })}
             >
-              <button type="button" className="slide__frame" onClick={() => onOpen(a)} tabIndex={i === index ? 0 : -1} aria-label={`Voir ${a.title}`}>
+              <button type="button" className="slide__frame" onClick={() => onOpen(a)} tabIndex={i === index ? 0 : -1} aria-label={t('Voir {title}', { title: a.title })}>
                 <ArtImage src={a.imageUrl} alt="" eager={i === 0} />
               </button>
               <div className="slide__caption">
@@ -65,15 +67,15 @@ export default function FeaturedSlider({ slides, onOpen }: { slides: Artwork[]; 
         })}
       </div>
       <div className="slider__controls">
-        <button type="button" className="round" onClick={() => go(index - 1)} aria-label="Œuvre précédente">
+        <button type="button" className="round" onClick={() => go(index - 1)} aria-label={t('Œuvre précédente')}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
         <div className="dots">
           {slides.map((a, i) => (
-            <button key={a.id} type="button" className={i === index ? 'is-active' : ''} onClick={() => go(i)} aria-label={`Afficher l'œuvre ${i + 1}`} aria-current={i === index} />
+            <button key={a.id} type="button" className={i === index ? 'is-active' : ''} onClick={() => go(i)} aria-label={t("Afficher l'œuvre {n}", { n: i + 1 })} aria-current={i === index} />
           ))}
         </div>
-        <button type="button" className="round" onClick={() => go(index + 1)} aria-label="Œuvre suivante">
+        <button type="button" className="round" onClick={() => go(index + 1)} aria-label={t('Œuvre suivante')}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
         </button>
       </div>

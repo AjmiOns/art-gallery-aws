@@ -106,6 +106,8 @@ Toutes les variables sont dans `backend/.env` (modèle : `backend/.env.example`,
 | `POST /subscriptions/stripe/confirm` | artiste | Retour de Stripe Checkout |
 | `POST /subscriptions/cancel` | artiste | Retour au plan gratuit |
 
+**Langue des messages.** L'API renvoie ses messages d'erreur en français. Le frontend les traduit en anglais avec `frontend/lib/en.ts` : tout nouveau message d'erreur doit y être ajouté (`npm run check:i18n` dans `frontend/` signale les oublis).
+
 **Paiement.** Deux fournisseurs : `mock` et `stripe`. Seuls la marque et les 4 derniers chiffres de la carte sont conservés, jamais le numéro complet.
 
 ### Messagerie

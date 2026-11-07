@@ -81,6 +81,10 @@ frontend/
 
 **Thème clair / sombre.** Les couleurs sont des variables CSS (`:root` pour le clair, `:root[data-theme='dark']` pour le sombre, dans `app/globals.css`) : tout nouveau style doit utiliser ces variables plutôt qu'une couleur écrite en dur. Le choix est mémorisé dans `localStorage` (`gallery-theme`) ; sans choix, le thème suit le réglage de l'appareil. Un petit script dans `<head>` applique le thème avant le premier affichage pour éviter un flash clair. Voir `components/ThemeProvider.tsx` et `ThemeToggle.tsx`.
 
+**Langue français / anglais.** Le bouton FR / EN est en bas de page (`components/LanguageSwitch.tsx`) et sur les pages de connexion et d'inscription. Le choix est mémorisé dans `localStorage` (`gallery-lang`) ; sans choix, la langue du navigateur est utilisée (français si elle commence par « fr », anglais sinon). Le français est la langue source : le texte du code sert de clé, `t('Mes œuvres')`, et le dictionnaire anglais est dans `lib/en.ts`. Les variables s'écrivent `{nom}` : `t('Payer {amount}', { amount })`. Les dates, prix et pourcentages suivent aussi la langue (`lib/format.ts`). Les messages d'erreur renvoyés par l'API sont traduits par le même dictionnaire (`translateServer` dans `lib/i18n.ts`).
+
+Pour ajouter ou modifier un texte : l'écrire en français dans le composant avec `t(...)`, ajouter la ligne anglaise dans `lib/en.ts`, puis lancer `npm run check:i18n`, qui liste les traductions manquantes (interface, plans d'abonnement et messages d'erreur du backend). Limites connues : le titre d'onglet du navigateur reste en français, et les catégories créées par un administrateur gardent le nom saisi (seules les catégories d'origine sont traduites).
+
 L'interface est responsive (voir la capture mobile ci-dessous). Les droits sont appliqués par l'API : masquer un bouton côté interface ne remplace jamais le contrôle côté backend.
 
 ## Images des œuvres

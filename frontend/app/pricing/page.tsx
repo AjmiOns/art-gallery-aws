@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, Billing, MySubscription, Plan, PlanCatalog, PlanId } from '@/lib/api';
 import { formatPercent, formatPrice } from '@/lib/format';
 import { useAuth } from '@/components/AuthProvider';
+import { useI18n } from '@/components/LanguageProvider';
 
 const RANK: Record<PlanId, number> = { free: 0, premium: 1, pro: 2 };
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -15,6 +16,7 @@ const Check = () => (
 
 export default function PricingPage() {
   const { user, token, ready } = useAuth();
+  const { t } = useI18n();
   const [catalog, setCatalog] = useState<PlanCatalog | null>(null);
   const [mine, setMine] = useState<MySubscription | null>(null);
   const [error, setError] = useState('');
@@ -47,37 +49,37 @@ export default function PricingPage() {
   function cta(p: Plan) {
     if (!ready) return null;
     if (p.id === 'free') {
-      if (!user) return <Link href="/register" className="btn btn--soft btn--block">Commencer gratuitement</Link>;
-      return <span className="plan__current">{currentId === 'free' ? 'Votre plan actuel' : 'Plan de base'}</span>;
+      if (!user) return <Link href="/register" className="btn btn--soft btn--block">{t('Commencer gratuitement')}</Link>;
+      return <span className="plan__current">{currentId === 'free' ? t('Votre plan actuel') : t('Plan de base')}</span>;
     }
-    if (!user) return <Link href="/register" className="btn btn--primary btn--block">Créer un compte artiste</Link>;
-    if (user.role !== 'artist') return <span className="plan__current">Réservé aux comptes artiste</span>;
+    if (!user) return <Link href="/register" className="btn btn--primary btn--block">{t('Créer un compte artiste')}</Link>;
+    if (user.role !== 'artist') return <span className="plan__current">{t('Réservé aux comptes artiste')}</span>;
     if (p.id === currentId) {
       return (
-        <Link href={`/subscribe?plan=${p.id}&billing=${billing}`} className="btn btn--soft btn--block">Renouveler</Link>
+        <Link href={`/subscribe?plan=${p.id}&billing=${billing}`} className="btn btn--soft btn--block">{t('Renouveler')}</Link>
       );
     }
-    if (RANK[p.id] < RANK[currentId]) return <span className="plan__current">Inclus dans votre plan</span>;
-    return <Link href={`/subscribe?plan=${p.id}&billing=${billing}`} className="btn btn--primary btn--block">Choisir {p.name}</Link>;
+    if (RANK[p.id] < RANK[currentId]) return <span className="plan__current">{t('Inclus dans votre plan')}</span>;
+    return <Link href={`/subscribe?plan=${p.id}&billing=${billing}`} className="btn btn--primary btn--block">{t('Choisir {plan}', { plan: t(p.name) })}</Link>;
   }
 
   return (
     <div className="page page--wide">
       <header className="pricing-head">
-        <h1>Vendez plus, gardez plus</h1>
+        <h1>{t('Vendez plus, gardez plus')}</h1>
         <p className="muted">
-          Publiez gratuitement, ou passez à un abonnement pour réduire la commission prélevée sur chaque vente et mettre vos œuvres en avant.
+          {t('Publiez gratuitement, ou passez à un abonnement pour réduire la commission prélevée sur chaque vente et mettre vos œuvres en avant.')}
         </p>
-        <div className="billing-toggle" role="group" aria-label="Fréquence de facturation">
-          <button type="button" className={billing === 'monthly' ? 'is-active' : ''} aria-pressed={billing === 'monthly'} onClick={() => setBilling('monthly')}>Mensuel</button>
+        <div className="billing-toggle" role="group" aria-label={t('Fréquence de facturation')}>
+          <button type="button" className={billing === 'monthly' ? 'is-active' : ''} aria-pressed={billing === 'monthly'} onClick={() => setBilling('monthly')}>{t('Mensuel')}</button>
           <button type="button" className={billing === 'yearly' ? 'is-active' : ''} aria-pressed={billing === 'yearly'} onClick={() => setBilling('yearly')}>
-            Annuel <span className="billing-toggle__save">2 mois offerts</span>
+            {t('Annuel')} <span className="billing-toggle__save">{t('2 mois offerts')}</span>
           </button>
         </div>
       </header>
 
       {error && <p className="form-error" role="alert">{error}</p>}
-      {!catalog && !error && <p className="muted">Chargement des tarifs…</p>}
+      {!catalog && !error && <p className="muted">{t('Chargement des tarifs…')}</p>}
 
       {catalog && (
         <>
@@ -87,18 +89,18 @@ export default function PricingPage() {
               const price = billing === 'yearly' ? p.yearlyPrice : p.monthlyPrice;
               return (
                 <article key={p.id} className={`plan${featured ? ' plan--featured' : ''}${p.id === currentId && user?.role === 'artist' ? ' plan--current' : ''}`}>
-                  {featured && <span className="plan__ribbon">Le plus choisi</span>}
-                  <h2>{p.name}</h2>
-                  <p className="muted plan__tagline">{p.tagline}</p>
+                  {featured && <span className="plan__ribbon">{t('Le plus choisi')}</span>}
+                  <h2>{t(p.name)}</h2>
+                  <p className="muted plan__tagline">{t(p.tagline)}</p>
                   <p className="plan__price">
-                    <strong>{price === 0 ? 'Gratuit' : formatPrice(price, currency)}</strong>
-                    {price > 0 && <span>/ {billing === 'yearly' ? 'an' : 'mois'}</span>}
+                    <strong>{price === 0 ? t('Gratuit') : formatPrice(price, currency)}</strong>
+                    {price > 0 && <span>/ {billing === 'yearly' ? t('an') : t('mois')}</span>}
                   </p>
                   <p className="plan__commission">
-                    Commission <strong>{formatPercent(p.commissionRate)}</strong> par vente
+                    {t('Commission')} <strong>{formatPercent(p.commissionRate)}</strong> {t('par vente')}
                   </p>
                   <ul className="plan__perks">
-                    {p.perks.map((perk) => <li key={perk}><Check />{perk}</li>)}
+                    {p.perks.map((perk) => <li key={perk}><Check />{t(perk)}</li>)}
                   </ul>
                   <div className="plan__cta">{cta(p)}</div>
                 </article>
@@ -107,19 +109,19 @@ export default function PricingPage() {
           </div>
 
           <section className="panel calc" aria-labelledby="calc-title">
-            <h2 id="calc-title">Quel abonnement vous convient ?</h2>
-            <p className="muted">Indiquez vos ventes mensuelles estimées pour voir ce que vous gardez avec chaque plan.</p>
+            <h2 id="calc-title">{t('Quel abonnement vous convient ?')}</h2>
+            <p className="muted">{t('Indiquez vos ventes mensuelles estimées pour voir ce que vous gardez avec chaque plan.')}</p>
             <label className="field calc__input">
-              <span>Ventes par mois ({currency})</span>
+              <span>{t('Ventes par mois ({currency})', { currency: currency ?? '' })}</span>
               <input type="number" min={0} step={50} value={volume} onChange={(e) => setVolume(Math.max(0, Number(e.target.value) || 0))} />
             </label>
             <div className="table-wrap">
               <table className="table table--compact">
-                <thead><tr><th>Plan</th><th>Abonnement</th><th>Commission</th><th>Vous gardez</th></tr></thead>
+                <thead><tr><th>{t('Plan')}</th><th>{t('Abonnement')}</th><th>{t('Commission')}</th><th>{t('Vous gardez')}</th></tr></thead>
                 <tbody>
                   {comparison.map((r) => (
                     <tr key={r.plan.id} className={r.best ? 'is-best' : ''}>
-                      <td><strong>{r.plan.name}</strong>{r.best && <span className="calc__best">Le plus avantageux</span>}</td>
+                      <td><strong>{t(r.plan.name)}</strong>{r.best && <span className="calc__best">{t('Le plus avantageux')}</span>}</td>
                       <td>{formatPrice(r.fee, currency)}</td>
                       <td>{formatPrice(r.commission, currency)} <span className="muted">({formatPercent(r.plan.commissionRate)})</span></td>
                       <td><strong>{formatPrice(r.net, currency)}</strong></td>
@@ -128,7 +130,7 @@ export default function PricingPage() {
                 </tbody>
               </table>
             </div>
-            <small className="muted">Estimation indicative. La commission est calculée sur le prix de l&apos;œuvre au moment du paiement et reste figée pour la vente.</small>
+            <small className="muted">{t("Estimation indicative. La commission est calculée sur le prix de l'œuvre au moment du paiement et reste figée pour la vente.")}</small>
           </section>
         </>
       )}

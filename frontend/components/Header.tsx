@@ -6,12 +6,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthProvider';
 import Avatar from './Avatar';
+import { useI18n } from './LanguageProvider';
 import ThemeToggle from './ThemeToggle';
 
 const ROLE_LABEL = { admin: 'Administrateur', artist: 'Artiste', buyer: 'Acheteur' } as const;
 
 export default function Header() {
   const { user, token, ready, signOut } = useAuth();
+  const { t } = useI18n();
   const pathname = usePathname();
   const [menu, setMenu] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -52,7 +54,7 @@ export default function Header() {
 
   const link = (href: string, label: string, extra?: React.ReactNode) => (
     <Link href={href} className="nav-link" aria-current={pathname === href || (href !== '/' && pathname.startsWith(href)) ? 'page' : undefined}>
-      {label}
+      {t(label)}
       {extra}
     </Link>
   );
@@ -62,16 +64,16 @@ export default function Header() {
       <div className="site-header__inner">
         <Link href="/" className="brand">
           <span className="brand__mark" aria-hidden="true" />
-          Galerie d&apos;art
+          {t("Galerie d'art")}
         </Link>
-        <nav aria-label="Navigation principale">
+        <nav aria-label={t('Navigation principale')}>
           <Link href="/" className="nav-link nav-link--optional" aria-current={pathname === '/' ? 'page' : undefined}>
-            Œuvres
+            {t('Œuvres')}
           </Link>
           {ready && user?.role !== 'buyer' && user?.role !== 'admin' && link('/pricing', 'Tarifs')}
           {ready && user?.role === 'artist' && link('/artist', 'Espace artiste')}
           {ready && user?.role === 'admin' && link('/admin', 'Administration')}
-          {ready && user && link('/messages', 'Messages', unread > 0 ? <span className="nav-badge" aria-label={`${unread} non lus`}>{unread}</span> : null)}
+          {ready && user && link('/messages', 'Messages', unread > 0 ? <span className="nav-badge" aria-label={t('{n} non lus', { n: unread })}>{unread}</span> : null)}
 
           <ThemeToggle />
 
@@ -85,14 +87,14 @@ export default function Header() {
                 <div className="menu__panel" role="menu">
                   <div className="menu__who">
                     <strong>{user.username}</strong>
-                    <span>{ROLE_LABEL[user.role]}</span>
+                    <span>{t(ROLE_LABEL[user.role])}</span>
                   </div>
-                  <Link href="/account" role="menuitem">Mon profil</Link>
-                  {user.role !== 'admin' && <Link href="/orders" role="menuitem">Mes achats</Link>}
-                  {user.role === 'artist' && <Link href="/artist" role="menuitem">Mes œuvres et demandes</Link>}
-                  {user.role === 'artist' && <Link href="/artist?tab=subscription" role="menuitem">Mon abonnement</Link>}
-                  {user.role === 'admin' && <Link href="/admin" role="menuitem">Administration</Link>}
-                  <button type="button" role="menuitem" onClick={signOut}>Se déconnecter</button>
+                  <Link href="/account" role="menuitem">{t('Mon profil')}</Link>
+                  {user.role !== 'admin' && <Link href="/orders" role="menuitem">{t('Mes achats')}</Link>}
+                  {user.role === 'artist' && <Link href="/artist" role="menuitem">{t('Mes œuvres et demandes')}</Link>}
+                  {user.role === 'artist' && <Link href="/artist?tab=subscription" role="menuitem">{t('Mon abonnement')}</Link>}
+                  {user.role === 'admin' && <Link href="/admin" role="menuitem">{t('Administration')}</Link>}
+                  <button type="button" role="menuitem" onClick={signOut}>{t('Se déconnecter')}</button>
                 </div>
               )}
             </div>
@@ -100,12 +102,12 @@ export default function Header() {
             ready && (
               <>
                 <Link href="/login" className="btn btn--ghost btn--sm">
-                  <span className="wide">Se connecter</span>
-                  <span className="narrow">Connexion</span>
+                  <span className="wide">{t('Se connecter')}</span>
+                  <span className="narrow">{t('Connexion')}</span>
                 </Link>
                 <Link href="/register" className="btn btn--primary btn--sm">
-                  <span className="wide">Créer un compte</span>
-                  <span className="narrow">S&apos;inscrire</span>
+                  <span className="wide">{t('Créer un compte')}</span>
+                  <span className="narrow">{t("S'inscrire")}</span>
                 </Link>
               </>
             )

@@ -6,12 +6,14 @@ import { api, Order } from '@/lib/api';
 import { formatPrice, formatShortDate } from '@/lib/format';
 import ArtImage from '../ArtImage';
 import { useAuth } from '../AuthProvider';
+import { useI18n } from '../LanguageProvider';
 import StatusBadge from '../StatusBadge';
 import { useToast } from '../Toast';
 
 export default function AdminOrders() {
   const { token } = useAuth();
   const toast = useToast();
+  const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +33,7 @@ export default function AdminOrders() {
     if (!token) return;
     try {
       await api.orderAction(id, action, token);
-      toast.show('Commande mise à jour.');
+      toast.show(t('Commande mise à jour.'));
       load();
     } catch (e) {
       toast.show((e as Error).message, 'error');
@@ -41,16 +43,16 @@ export default function AdminOrders() {
   return (
     <div>
       <div className="toolbar">
-        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Statut">
-          <option value="">Toutes les commandes</option><option value="pending">En attente</option><option value="accepted">Acceptées, à payer</option>
-          <option value="paid">Payées</option><option value="rejected">Refusées</option><option value="cancelled">Annulées</option>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t('Statut')}>
+          <option value="">{t('Toutes les commandes')}</option><option value="pending">{t('En attente')}</option><option value="accepted">{t('Acceptées, à payer')}</option>
+          <option value="paid">{t('Payées')}</option><option value="rejected">{t('Refusées')}</option><option value="cancelled">{t('Annulées')}</option>
         </select>
-        <span className="muted toolbar__count">{orders.length} commande{orders.length > 1 ? 's' : ''}</span>
+        <span className="muted toolbar__count">{t(orders.length > 1 ? '{count} commandes' : '{count} commande', { count: orders.length })}</span>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Date</th><th>Œuvre</th><th>Acheteur</th><th>Artiste</th><th>Montant</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>{t('Date')}</th><th>{t('Œuvre')}</th><th>{t('Acheteur')}</th><th>{t('Artiste')}</th><th>{t('Montant')}</th><th>{t('Statut')}</th><th><span className="sr-only">{t('Actions')}</span></th></tr></thead>
           <tbody>
             {orders.map((o) => (
               <tr key={o.id}>
@@ -61,10 +63,10 @@ export default function AdminOrders() {
                 <td>{formatPrice(o.amount)}</td>
                 <td><StatusBadge status={o.status} /></td>
                 <td className="cell-actions cell-actions--wrap">
-                  {o.status === 'pending' && <><button type="button" className="btn btn--soft btn--sm" onClick={() => act(o.id, 'accept')}>Accepter</button><button type="button" className="btn btn--ghost btn--sm" onClick={() => act(o.id, 'reject')}>Refuser</button></>}
-                  {(o.status === 'pending' || o.status === 'accepted') && <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => act(o.id, 'cancel')}>Annuler</button>}
-                  <Link href={`/messages?to=${o.buyer.id}&artwork=${o.artwork.id}`} className="btn btn--ghost btn--sm">Acheteur</Link>
-                  <Link href={`/messages?to=${o.seller.id}&artwork=${o.artwork.id}`} className="btn btn--ghost btn--sm">Artiste</Link>
+                  {o.status === 'pending' && <><button type="button" className="btn btn--soft btn--sm" onClick={() => act(o.id, 'accept')}>{t('Accepter')}</button><button type="button" className="btn btn--ghost btn--sm" onClick={() => act(o.id, 'reject')}>{t('Refuser')}</button></>}
+                  {(o.status === 'pending' || o.status === 'accepted') && <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => act(o.id, 'cancel')}>{t('Annuler')}</button>}
+                  <Link href={`/messages?to=${o.buyer.id}&artwork=${o.artwork.id}`} className="btn btn--ghost btn--sm">{t('Acheteur')}</Link>
+                  <Link href={`/messages?to=${o.seller.id}&artwork=${o.artwork.id}`} className="btn btn--ghost btn--sm">{t('Artiste')}</Link>
                 </td>
               </tr>
             ))}

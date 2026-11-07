@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Artwork } from '@/lib/api';
 import type { Category } from '@/lib/categories';
 import ArtworkCard from './ArtworkCard';
+import { useI18n } from './LanguageProvider';
 
 type Props = {
   category: Category;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function ArtworkCarousel({ category, items, onOpen, onSeeAll, asGrid = false }: Props) {
+  const { t } = useI18n();
   const track = useRef<HTMLUListElement>(null);
   const [edge, setEdge] = useState({ start: true, end: false });
 
@@ -53,13 +55,13 @@ export default function ArtworkCarousel({ category, items, onOpen, onSeeAll, asG
           <div className="shelf__controls">
             {onSeeAll && (
               <button type="button" className="btn btn--ghost btn--sm" onClick={onSeeAll}>
-                Voir tout
+                {t('Voir tout')}
               </button>
             )}
-            <button type="button" className="round" onClick={() => scrollBy(-1)} disabled={edge.start} aria-label={`${category.label} : précédent`}>
+            <button type="button" className="round" onClick={() => scrollBy(-1)} disabled={edge.start} aria-label={t('{label} : précédent', { label: category.label })}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
             </button>
-            <button type="button" className="round" onClick={() => scrollBy(1)} disabled={edge.end} aria-label={`${category.label} : suivant`}>
+            <button type="button" className="round" onClick={() => scrollBy(1)} disabled={edge.end} aria-label={t('{label} : suivant', { label: category.label })}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
             </button>
           </div>

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "npx serve out"
+    "start": "npx serve out",
+    "check:i18n": "node scripts/check-i18n.cjs"
   },
   "dependencies": {
     "next": "^15.0.0",

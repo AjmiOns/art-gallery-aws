@@ -5,14 +5,16 @@ import { api } from '@/lib/api';
 import { Category, TONES } from '@/lib/categories';
 import { useAuth } from '../AuthProvider';
 import { useCategories } from '../CategoriesProvider';
+import { useI18n } from '../LanguageProvider';
 import Modal from '../Modal';
 import { useToast } from '../Toast';
 
-function TonePicker({ value, onChange }: { value: string; onChange: (t: string) => void }) {
+function TonePicker({ value, onChange }: { value: string; onChange: (tone: string) => void }) {
+  const { t } = useI18n();
   return (
-    <div className="tone-picker" role="group" aria-label="Couleur">
-      {TONES.map((t) => (
-        <button key={t} type="button" data-tone={t} className={value === t ? 'is-active' : ''} aria-pressed={value === t} aria-label={t} onClick={() => onChange(t)} />
+    <div className="tone-picker" role="group" aria-label={t('Couleur')}>
+      {TONES.map((tone) => (
+        <button key={tone} type="button" data-tone={tone} className={value === tone ? 'is-active' : ''} aria-pressed={value === tone} aria-label={tone} onClick={() => onChange(tone)} />
       ))}
     </div>
   );
@@ -24,6 +26,7 @@ export default function AdminCategories() {
   const { token } = useAuth();
   const { refresh } = useCategories();
   const toast = useToast();
+  const { t } = useI18n();
   const [items, setItems] = useState<Category[]>([]);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState({ label: '', slug: '', tagline: '', tone: 'pink' });
@@ -48,7 +51,7 @@ export default function AdminCategories() {
     if (!token) return;
     try {
       await api.adminCreateCategory({ ...draft, slug: draft.slug || slugify(draft.label) }, token);
-      toast.show('Catégorie créée.');
+      toast.show(t('Catégorie créée.'));
       setDraft({ label: '', slug: '', tagline: '', tone: 'pink' });
       changed();
     } catch (err) {
@@ -66,7 +69,7 @@ export default function AdminCategories() {
     if (!token || !editing) return;
     try {
       await api.adminUpdateCategory(editing.id, form, token);
-      toast.show('Catégorie mise à jour.');
+      toast.show(t('Catégorie mise à jour.'));
       setEditing(null);
       changed();
     } catch (err) {
@@ -85,10 +88,10 @@ export default function AdminCategories() {
   }
 
   async function remove(c: Category) {
-    if (!token || !window.confirm(`Supprimer la catégorie « ${c.label} » ?`)) return;
+    if (!token || !window.confirm(t('Supprimer la catégorie « {label} » ?', { label: c.label }))) return;
     try {
       await api.adminDeleteCategory(c.id, token);
-      toast.show('Catégorie supprimée.');
+      toast.show(t('Catégorie supprimée.'));
       changed();
     } catch (err) {
       toast.show((err as Error).message, 'error');
@@ -98,30 +101,30 @@ export default function AdminCategories() {
   return (
     <div className="admin-grid admin-grid--cats">
       <form className="panel form-stack" onSubmit={create}>
-        <h2>Nouvelle catégorie</h2>
-        <label className="field"><span>Nom</span><input required minLength={2} maxLength={60} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="Ex. Art urbain" /></label>
-        <label className="field"><span>Identifiant (slug)</span><input pattern="[a-z0-9]+(-[a-z0-9]+)*" value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} placeholder={slugify(draft.label) || 'art-urbain'} /><small className="muted">Généré depuis le nom si laissé vide. Non modifiable ensuite.</small></label>
-        <label className="field"><span>Description courte</span><input maxLength={120} value={draft.tagline} onChange={(e) => setDraft({ ...draft, tagline: e.target.value })} placeholder="Graffiti, pochoirs et fresques" /></label>
-        <div className="field"><span>Couleur</span><TonePicker value={draft.tone} onChange={(tone) => setDraft({ ...draft, tone })} /></div>
-        <div className="row-actions"><button type="submit" className="btn btn--primary">Créer la catégorie</button></div>
+        <h2>{t('Nouvelle catégorie')}</h2>
+        <label className="field"><span>{t('Nom')}</span><input required minLength={2} maxLength={60} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder={t('Ex. Art urbain')} /></label>
+        <label className="field"><span>{t('Identifiant (slug)')}</span><input pattern="[a-z0-9]+(-[a-z0-9]+)*" value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} placeholder={slugify(draft.label) || 'art-urbain'} /><small className="muted">{t('Généré depuis le nom si laissé vide. Non modifiable ensuite.')}</small></label>
+        <label className="field"><span>{t('Description courte')}</span><input maxLength={120} value={draft.tagline} onChange={(e) => setDraft({ ...draft, tagline: e.target.value })} placeholder={t('Graffiti, pochoirs et fresques')} /></label>
+        <div className="field"><span>{t('Couleur')}</span><TonePicker value={draft.tone} onChange={(tone) => setDraft({ ...draft, tone })} /></div>
+        <div className="row-actions"><button type="submit" className="btn btn--primary">{t('Créer la catégorie')}</button></div>
       </form>
 
       <div>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Ordre</th><th>Catégorie</th><th>Identifiant</th><th>Statut</th><th><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th>{t('Ordre')}</th><th>{t('Catégorie')}</th><th>{t('Identifiant')}</th><th>{t('Statut')}</th><th><span className="sr-only">{t('Actions')}</span></th></tr></thead>
             <tbody>
               {items.map((c) => (
                 <tr key={c.id}>
                   <td>{c.sortOrder}</td>
                   <td><div className="cell-art"><span className="swatch" data-tone={c.tone} /><div><strong>{c.label}</strong><br /><small className="muted">{c.tagline}</small></div></div></td>
                   <td><code>{c.slug}</code></td>
-                  <td><span className={`status ${c.isActive ? 'status--paid' : 'status--cancelled'}`}>{c.isActive ? 'Active' : 'Désactivée'}</span></td>
+                  <td><span className={`status ${c.isActive ? 'status--paid' : 'status--cancelled'}`}>{c.isActive ? t('Active') : t('Désactivée')}</span></td>
                   <td className="cell-actions">
-                    <button type="button" className="btn btn--soft btn--sm" onClick={() => edit(c)}>Modifier</button>
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => toggle(c)}>{c.isActive ? 'Désactiver' : 'Activer'}</button>
-                    <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => remove(c)}>Supprimer</button>
+                    <button type="button" className="btn btn--soft btn--sm" onClick={() => edit(c)}>{t('Modifier')}</button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => toggle(c)}>{c.isActive ? t('Désactiver') : t('Activer')}</button>
+                    <button type="button" className="btn btn--ghost btn--sm btn--danger" onClick={() => remove(c)}>{t('Supprimer')}</button>
                   </td>
                 </tr>
               ))}
@@ -130,16 +133,16 @@ export default function AdminCategories() {
         </div>
       </div>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={`Modifier ${editing?.label ?? ''}`}>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={t('Modifier {name}', { name: editing?.label ?? '' })}>
         <form className="form-stack" onSubmit={save}>
-          <label className="field"><span>Nom</span><input required minLength={2} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></label>
-          <label className="field"><span>Description courte</span><input maxLength={120} value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} /></label>
-          <div className="field"><span>Couleur</span><TonePicker value={form.tone} onChange={(tone) => setForm({ ...form, tone })} /></div>
+          <label className="field"><span>{t('Nom')}</span><input required minLength={2} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></label>
+          <label className="field"><span>{t('Description courte')}</span><input maxLength={120} value={form.tagline} onChange={(e) => setForm({ ...form, tagline: e.target.value })} /></label>
+          <div className="field"><span>{t('Couleur')}</span><TonePicker value={form.tone} onChange={(tone) => setForm({ ...form, tone })} /></div>
           <div className="form-grid">
-            <label className="field"><span>Ordre d&apos;affichage</span><input type="number" min={0} value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} /></label>
-            <label className="field field--check"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /><span>Catégorie active</span></label>
+            <label className="field"><span>{t("Ordre d'affichage")}</span><input type="number" min={0} value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} /></label>
+            <label className="field field--check"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /><span>{t('Catégorie active')}</span></label>
           </div>
-          <div className="row-actions"><button type="submit" className="btn btn--primary">Enregistrer</button><button type="button" className="btn btn--ghost" onClick={() => setEditing(null)}>Annuler</button></div>
+          <div className="row-actions"><button type="submit" className="btn btn--primary">{t('Enregistrer')}</button><button type="button" className="btn btn--ghost" onClick={() => setEditing(null)}>{t('Annuler')}</button></div>
         </form>
       </Modal>
     </div>

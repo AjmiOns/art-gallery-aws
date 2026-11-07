@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, Order } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
+import { useI18n } from '@/components/LanguageProvider';
 import OrderCard from '@/components/OrderCard';
 import RequireRole from '@/components/RequireRole';
 import { useToast } from '@/components/Toast';
@@ -11,6 +12,7 @@ import { useToast } from '@/components/Toast';
 function MyOrders() {
   const { token } = useAuth();
   const toast = useToast();
+  const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,7 +42,7 @@ function MyOrders() {
     setBusyId(id);
     try {
       await api.orderAction(id, action, token);
-      toast.show('Demande annulée.');
+      toast.show(t('Demande annulée.'));
       await load();
     } catch (e) {
       toast.show((e as Error).message, 'error');
@@ -53,25 +55,25 @@ function MyOrders() {
     <div className="page page--wide">
       <header className="page-head">
         <div>
-          <h1>Mes achats</h1>
-          <p className="muted">Suivez vos demandes : l&apos;artiste les valide, puis vous payez en ligne.</p>
+          <h1>{t('Mes achats')}</h1>
+          <p className="muted">{t("Suivez vos demandes : l'artiste les valide, puis vous payez en ligne.")}</p>
         </div>
-        <Link href="/" className="btn btn--soft">Parcourir les œuvres</Link>
+        <Link href="/" className="btn btn--soft">{t('Parcourir les œuvres')}</Link>
       </header>
 
       {error && <p className="form-error" role="alert">{error}</p>}
-      {loading && <p className="muted">Chargement…</p>}
+      {loading && <p className="muted">{t('Chargement…')}</p>}
       {!loading && orders.length === 0 && !error && (
         <div className="state">
-          <p>Vous n&apos;avez encore fait aucune demande d&apos;achat.</p>
-          <Link href="/" className="btn btn--primary btn--sm">Découvrir la galerie</Link>
+          <p>{t("Vous n'avez encore fait aucune demande d'achat.")}</p>
+          <Link href="/" className="btn btn--primary btn--sm">{t('Découvrir la galerie')}</Link>
         </div>
       )}
 
       {([['pay', 'À payer'], ['waiting', "En attente de l'artiste"], ['history', 'Historique']] as const).map(([key, label]) =>
         groups[key].length > 0 && (
           <section key={key} className="order-group">
-            <h2>{label} <span className="count">{groups[key].length}</span></h2>
+            <h2>{t(label)} <span className="count">{groups[key].length}</span></h2>
             {groups[key].map((o) => <OrderCard key={o.id} order={o} perspective="buyer" busy={busyId === o.id} onAction={onAction} />)}
           </section>
         ),

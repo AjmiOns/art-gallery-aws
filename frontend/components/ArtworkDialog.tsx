@@ -9,6 +9,7 @@ import Avatar from './Avatar';
 import PlanBadge from './PlanBadge';
 import { useAuth } from './AuthProvider';
 import { useCategories } from './CategoriesProvider';
+import { useI18n } from './LanguageProvider';
 import { useToast } from './Toast';
 
 type Props = { artwork: Artwork | null; onClose: () => void };
@@ -18,6 +19,7 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
   const { user, token } = useAuth();
   const { categoryOf } = useCategories();
   const toast = useToast();
+  const { t } = useI18n();
   const [myOrder, setMyOrder] = useState<Order | null>(null);
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState('');
@@ -55,7 +57,7 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
     setError('');
     try {
       await api.requestPurchase(artwork.id, note, token);
-      toast.show("Demande envoyée. L'artiste doit maintenant la valider.");
+      toast.show(t("Demande envoyée. L'artiste doit maintenant la valider."));
       setAsking(false);
       await loadOrder();
     } catch (e) {
@@ -70,7 +72,7 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
     setBusy(true);
     try {
       await api.orderAction(myOrder.id, 'cancel', token);
-      toast.show('Demande annulée.');
+      toast.show(t('Demande annulée.'));
       await loadOrder();
     } catch (e) {
       setError((e as Error).message);
@@ -87,7 +89,7 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
     <dialog
       ref={ref}
       className="dialog"
-      aria-label={artwork?.title ?? 'Détail de l’œuvre'}
+      aria-label={artwork?.title ?? t('Détail de l’œuvre')}
       onClose={onClose}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
@@ -97,68 +99,68 @@ export default function ArtworkDialog({ artwork, onClose }: Props) {
             <ArtImage src={artwork.imageUrl} alt={artwork.title} eager />
           </div>
           <div className="dialog__info">
-            <button type="button" className="dialog__close" onClick={onClose} aria-label="Fermer">
+            <button type="button" className="dialog__close" onClick={onClose} aria-label={t('Fermer')}>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
             <span className="pill pill--solid">{cat.label}</span>
             <h2>{artwork.title}</h2>
             <p className="dialog__artist">
-              <Avatar name={artwork.owner?.username ?? 'Artiste'} size={32} />
-              {artwork.owner?.username ?? 'Artiste'}
+              <Avatar name={artwork.owner?.username ?? t('Artiste')} size={32} />
+              {artwork.owner?.username ?? t('Artiste')}
               <PlanBadge plan={artwork.owner?.plan} />
             </p>
             <p className="dialog__price">{formatPrice(artwork.price)}</p>
-            <p className="dialog__date">Mise en ligne le {formatDate(artwork.createdAt)}</p>
+            <p className="dialog__date">{t('Mise en ligne le {date}', { date: formatDate(artwork.createdAt) })}</p>
 
             {error && <p className="form-error" role="alert">{error}</p>}
 
             <div className="dialog__actions">
               {artwork.status === 'sold' ? (
-                <span className="badge-sold badge-sold--inline">Cette œuvre est vendue</span>
+                <span className="badge-sold badge-sold--inline">{t('Cette œuvre est vendue')}</span>
               ) : mine ? (
-                <span className="muted">Vous êtes l&apos;artiste de cette œuvre.</span>
+                <span className="muted">{t("Vous êtes l'artiste de cette œuvre.")}</span>
               ) : !user ? (
                 <>
-                  <Link href="/login" className="btn btn--primary">Se connecter pour acheter</Link>
-                  <Link href="/register" className="btn btn--ghost">Créer un compte</Link>
+                  <Link href="/login" className="btn btn--primary">{t('Se connecter pour acheter')}</Link>
+                  <Link href="/register" className="btn btn--ghost">{t('Créer un compte')}</Link>
                 </>
               ) : myOrder?.status === 'accepted' ? (
                 <>
-                  <p className="dialog__note dialog__note--ok">L&apos;artiste a accepté votre demande. Finalisez le paiement pour devenir propriétaire.</p>
-                  <Link href={`/checkout?order=${myOrder.id}`} className="btn btn--primary">Payer {formatPrice(myOrder.amount)}</Link>
-                  <button type="button" className="btn btn--ghost" onClick={cancelRequest} disabled={busy}>Annuler</button>
+                  <p className="dialog__note dialog__note--ok">{t("L'artiste a accepté votre demande. Finalisez le paiement pour devenir propriétaire.")}</p>
+                  <Link href={`/checkout?order=${myOrder.id}`} className="btn btn--primary">{t('Payer {amount}', { amount: formatPrice(myOrder.amount) })}</Link>
+                  <button type="button" className="btn btn--ghost" onClick={cancelRequest} disabled={busy}>{t('Annuler')}</button>
                 </>
               ) : myOrder?.status === 'pending' ? (
                 <>
-                  <p className="dialog__note">Demande envoyée : en attente de la réponse de l&apos;artiste.</p>
-                  <button type="button" className="btn btn--soft" onClick={cancelRequest} disabled={busy}>Annuler ma demande</button>
+                  <p className="dialog__note">{t("Demande envoyée : en attente de la réponse de l'artiste.")}</p>
+                  <button type="button" className="btn btn--soft" onClick={cancelRequest} disabled={busy}>{t('Annuler ma demande')}</button>
                 </>
               ) : artwork.status === 'reserved' ? (
-                <p className="dialog__note">Cette œuvre est réservée par un autre acheteur.</p>
+                <p className="dialog__note">{t('Cette œuvre est réservée par un autre acheteur.')}</p>
               ) : user.role === 'admin' ? (
-                <p className="dialog__note">Les administrateurs ne peuvent pas acheter.</p>
+                <p className="dialog__note">{t('Les administrateurs ne peuvent pas acheter.')}</p>
               ) : asking ? (
                 <div className="ask">
                   <label className="field">
-                    <span>Message pour l&apos;artiste (facultatif)</span>
-                    <textarea rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Une question, une précision de livraison…" />
+                    <span>{t("Message pour l'artiste (facultatif)")}</span>
+                    <textarea rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Une question, une précision de livraison…')} />
                   </label>
                   <div className="row-actions">
                     <button type="button" className="btn btn--primary" onClick={sendRequest} disabled={busy}>
-                      {busy ? 'Envoi…' : 'Envoyer la demande'}
+                      {busy ? t('Envoi…') : t('Envoyer la demande')}
                     </button>
-                    <button type="button" className="btn btn--ghost" onClick={() => setAsking(false)} disabled={busy}>Annuler</button>
+                    <button type="button" className="btn btn--ghost" onClick={() => setAsking(false)} disabled={busy}>{t('Annuler')}</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <button type="button" className="btn btn--primary" onClick={() => setAsking(true)}>Demander l&apos;achat</button>
-                  <p className="dialog__hint">L&apos;artiste valide votre demande, puis vous payez en ligne en toute sécurité.</p>
+                  <button type="button" className="btn btn--primary" onClick={() => setAsking(true)}>{t("Demander l'achat")}</button>
+                  <p className="dialog__hint">{t("L'artiste valide votre demande, puis vous payez en ligne en toute sécurité.")}</p>
                 </>
               )}
 
               {!mine && artwork.status !== 'sold' && user && (
-                <Link href={contactHref} className="btn btn--soft">Contacter l&apos;artiste</Link>
+                <Link href={contactHref} className="btn btn--soft">{t("Contacter l'artiste")}</Link>
               )}
             </div>
           </div>

@@ -89,7 +89,7 @@ Le réseau actuellement déployé (VPC, trois niveaux de sous-réseaux, NAT, gro
 | **Acheteur** | Demander l'achat d'une œuvre avec un message, suivre ses demandes, payer par carte, imprimer un reçu, écrire aux artistes |
 | **Artiste** | Publier, modifier et supprimer ses œuvres (avec image), accepter ou refuser les demandes, contacter les acheteurs, suivre ses ventes (brut, commission, net), choisir un abonnement Gratuit, Premium ou Pro |
 | **Administrateur** | Statistiques (dont commissions et abonnements perçus), gestion des utilisateurs, des œuvres, des commandes et des catégories, contact de tout utilisateur |
-| **Tous les comptes** | Profil modifiable, changement de mot de passe, thème clair ou sombre (bouton dans l'en-tête, mémorisé, suit le réglage de l'appareil par défaut) |
+| **Tous les comptes** | Profil modifiable, changement de mot de passe, thème clair ou sombre (bouton dans l'en-tête, mémorisé, suit le réglage de l'appareil par défaut), langue français ou anglais (bouton FR / EN en bas de page et sur les pages de connexion) |
 
 ### Abonnements et commissions
 

@@ -7,12 +7,14 @@ import { api, Artwork, Conversation, Thread } from '@/lib/api';
 import { formatTime } from '@/lib/format';
 import Avatar from '@/components/Avatar';
 import { useAuth } from '@/components/AuthProvider';
+import { useI18n } from '@/components/LanguageProvider';
 import RequireRole from '@/components/RequireRole';
 
 const ROLE_LABEL = { admin: 'Admin', artist: 'Artiste', buyer: 'Acheteur' } as const;
 
 function Inbox() {
   const { token, user } = useAuth();
+  const { t } = useI18n();
   const params = useSearchParams();
   const toParam = params.get('to');
   const artworkParam = params.get('artwork');
@@ -52,8 +54,8 @@ function Inbox() {
 
   // Nouveaux messages : rafraîchissement régulier
   useEffect(() => {
-    const t = setInterval(() => { loadThreads(); loadConv(); }, 8000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => { loadThreads(); loadConv(); }, 8000);
+    return () => clearInterval(timer);
   }, [loadThreads, loadConv]);
 
   // Œuvre à l'origine de la discussion (depuis la fiche d'une œuvre)
@@ -82,52 +84,52 @@ function Inbox() {
   }
 
   const list: Thread[] = [...threads];
-  if (conv && !list.some((t) => t.userId === conv.user.id)) {
-    list.unshift({ userId: conv.user.id, username: conv.user.username, role: conv.user.role, lastMessage: 'Nouvelle conversation', lastAt: new Date().toISOString(), lastFromMe: false, unread: 0 });
+  if (conv && !list.some((th) => th.userId === conv.user.id)) {
+    list.unshift({ userId: conv.user.id, username: conv.user.username, role: conv.user.role, lastMessage: t('Nouvelle conversation'), lastAt: new Date().toISOString(), lastFromMe: false, unread: 0 });
   }
 
   return (
     <div className="page page--wide">
-      <header className="page-head"><div><h1>Messages</h1><p className="muted">Échangez avec les artistes, les acheteurs et l&apos;équipe de la galerie.</p></div></header>
+      <header className="page-head"><div><h1>{t('Messages')}</h1><p className="muted">{t("Échangez avec les artistes, les acheteurs et l'équipe de la galerie.")}</p></div></header>
 
       <div className={`inbox${activeId ? ' has-active' : ''}`}>
-        <aside className="inbox__list" aria-label="Conversations">
+        <aside className="inbox__list" aria-label={t('Conversations')}>
           {loaded && list.length === 0 && (
-            <div className="state state--plain"><p>Aucune conversation.</p><p className="muted">Contactez un artiste depuis la fiche d&apos;une de ses œuvres.</p><Link href="/" className="btn btn--soft btn--sm">Parcourir la galerie</Link></div>
+            <div className="state state--plain"><p>{t('Aucune conversation.')}</p><p className="muted">{t("Contactez un artiste depuis la fiche d'une de ses œuvres.")}</p><Link href="/" className="btn btn--soft btn--sm">{t('Parcourir la galerie')}</Link></div>
           )}
-          {list.map((t) => (
-            <button key={t.userId} type="button" className={`thread${activeId === t.userId ? ' is-active' : ''}`} onClick={() => setActiveId(t.userId)}>
-              <Avatar name={t.username} size={40} />
+          {list.map((th) => (
+            <button key={th.userId} type="button" className={`thread${activeId === th.userId ? ' is-active' : ''}`} onClick={() => setActiveId(th.userId)}>
+              <Avatar name={th.username} size={40} />
               <span className="thread__body">
-                <span className="thread__top"><strong>{t.username}</strong><span className="role-tag">{ROLE_LABEL[t.role]}</span></span>
-                <span className="thread__last">{t.lastFromMe ? 'Vous : ' : ''}{t.lastMessage}</span>
+                <span className="thread__top"><strong>{th.username}</strong><span className="role-tag">{t(ROLE_LABEL[th.role])}</span></span>
+                <span className="thread__last">{th.lastFromMe ? t('Vous : ') : ''}{th.lastMessage}</span>
               </span>
-              {t.unread > 0 && <span className="nav-badge">{t.unread}</span>}
+              {th.unread > 0 && <span className="nav-badge">{th.unread}</span>}
             </button>
           ))}
         </aside>
 
-        <section className="inbox__chat" aria-label="Conversation">
+        <section className="inbox__chat" aria-label={t('Conversation')}>
           {!activeId ? (
-            <div className="state state--plain"><p>Sélectionnez une conversation.</p></div>
+            <div className="state state--plain"><p>{t('Sélectionnez une conversation.')}</p></div>
           ) : (
             <>
               <header className="chat__head">
-                <button type="button" className="btn btn--ghost btn--sm chat__back" onClick={() => setActiveId(null)}>Retour</button>
-                {conv && <><Avatar name={conv.user.username} size={36} /><div><strong>{conv.user.username}</strong><span className="role-tag">{ROLE_LABEL[conv.user.role]}</span></div></>}
+                <button type="button" className="btn btn--ghost btn--sm chat__back" onClick={() => setActiveId(null)}>{t('Retour')}</button>
+                {conv && <><Avatar name={conv.user.username} size={36} /><div><strong>{conv.user.username}</strong><span className="role-tag">{t(ROLE_LABEL[conv.user.role])}</span></div></>}
               </header>
               <div className="chat__messages">
-                {conv && conv.messages.length === 0 && <p className="muted chat__empty">Écrivez votre premier message.</p>}
+                {conv && conv.messages.length === 0 && <p className="muted chat__empty">{t('Écrivez votre premier message.')}</p>}
                 {conv?.messages.map((m) => (
                   <div key={m.id} className={`bubble${m.senderId === user?.id ? ' bubble--me' : ''}`}>
-                    {m.artwork && <span className="bubble__ref">À propos de « {m.artwork.title} »</span>}
+                    {m.artwork && <span className="bubble__ref">{t('À propos de « {title} »', { title: m.artwork.title })}</span>}
                     <p>{m.body}</p>
                     <time>{formatTime(m.createdAt)}</time>
                   </div>
                 ))}
                 <div ref={endRef} />
               </div>
-              {artwork && <p className="chat__context">À propos de : <strong>{artwork.title}</strong></p>}
+              {artwork && <p className="chat__context">{t('À propos de :')} <strong>{artwork.title}</strong></p>}
               {error && <p className="form-error" role="alert">{error}</p>}
               <form className="chat__form" onSubmit={send}>
                 <textarea
@@ -136,10 +138,10 @@ function Inbox() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) send(e); }}
-                  placeholder="Votre message… (Entrée pour envoyer)"
-                  aria-label="Votre message"
+                  placeholder={t('Votre message… (Entrée pour envoyer)')}
+                  aria-label={t('Votre message')}
                 />
-                <button type="submit" className="btn btn--primary" disabled={sending || !text.trim()}>Envoyer</button>
+                <button type="submit" className="btn btn--primary" disabled={sending || !text.trim()}>{t('Envoyer')}</button>
               </form>
             </>
           )}

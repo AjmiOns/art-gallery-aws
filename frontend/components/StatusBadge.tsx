@@ -1,4 +1,7 @@
+'use client';
+
 import type { ArtworkStatus, OrderStatus } from '@/lib/api';
+import { useI18n } from './LanguageProvider';
 
 const LABELS: Record<OrderStatus | ArtworkStatus, string> = {
   pending: 'En attente',
@@ -12,5 +15,6 @@ const LABELS: Record<OrderStatus | ArtworkStatus, string> = {
 };
 
 export default function StatusBadge({ status }: { status: OrderStatus | ArtworkStatus }) {
-  return <span className={`status status--${status}`}>{LABELS[status]}</span>;
+  const { t } = useI18n();
+  return <span className={`status status--${status}`}>{t(LABELS[status])}</span>;
 }
