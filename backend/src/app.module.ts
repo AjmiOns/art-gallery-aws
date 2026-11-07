@@ -10,6 +10,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { MessagesModule } from './messages/messages.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AdminModule } from './admin/admin.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -38,6 +39,7 @@ import { HealthController } from './health/health.controller';
     PaymentsModule,
     MessagesModule,
     UploadsModule,
+    SubscriptionsModule,
     AdminModule,
   ],
   controllers: [HealthController],

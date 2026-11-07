@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { CategoriesProvider } from '@/components/CategoriesProvider';
+import { ThemeProvider, THEME_INIT_SCRIPT } from '@/components/ThemeProvider';
 import { ToastProvider } from '@/components/Toast';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -13,8 +14,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -23,15 +25,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <AuthProvider>
-          <CategoriesProvider>
-            <ToastProvider>
-              <Header />
-              <main>{children}</main>
-              <Footer />
-            </ToastProvider>
-          </CategoriesProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <CategoriesProvider>
+              <ToastProvider>
+                <Header />
+                <main>{children}</main>
+                <Footer />
+              </ToastProvider>
+            </CategoriesProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -11,3 +11,7 @@ export const formatShortDate = (iso: string) =>
 
 export const formatTime = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+// 0.08 -> « 8 % », 0.125 -> « 12,5 % »
+export const formatPercent = (rate: number) =>
+  `${(rate * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;

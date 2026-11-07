@@ -8,33 +8,12 @@ import { DataSource, Repository } from 'typeorm';
 import { Artwork } from '../artworks/artwork.entity';
 import { AuthUser } from '../common/current-user.decorator';
 import { Order } from '../orders/order.entity';
+import { commissionRateFor, round2 } from '../subscriptions/plans';
+import { User } from '../users/user.entity';
+import { brandOf, CardInput, DECLINED, validateCard } from './card';
 import { Payment } from './payment.entity';
 
-export interface CardInput { cardNumber: string; expiry: string; cvc: string; holder: string }
-
-// Cartes de test (comme chez Stripe) : 4242… réussit, les suivantes simulent un refus.
-const DECLINED: Record<string, string> = {
-  '4000000000000002': 'Carte refusée par la banque.',
-  '4000000000009995': 'Fonds insuffisants.',
-  '4000000000000069': 'Carte expirée.',
-};
-
-function luhn(digits: string) {
-  let sum = 0;
-  for (let i = 0; i < digits.length; i++) {
-    let n = Number(digits[digits.length - 1 - i]);
-    if (i % 2 === 1) { n *= 2; if (n > 9) n -= 9; }
-    sum += n;
-  }
-  return sum % 10 === 0;
-}
-
-function brandOf(n: string) {
-  if (/^4/.test(n)) return 'Visa';
-  if (/^(5[1-5]|2[2-7])/.test(n)) return 'Mastercard';
-  if (/^3[47]/.test(n)) return 'American Express';
-  return 'Carte';
-}
+export type { CardInput };
 
 @Injectable()
 export class PaymentsService {
@@ -62,7 +41,8 @@ export class PaymentsService {
     return { provider: this.provider, currency: this.currency, testMode: true };
   }
 
-  private get stripe() {
+  // Partagé avec le module d'abonnements
+  get stripe() {
     if (!this.stripeClient) this.stripeClient = new Stripe(this.config.getOrThrow<string>('STRIPE_SECRET_KEY'));
     return this.stripeClient;
   }
@@ -111,15 +91,7 @@ export class PaymentsService {
     if (payment.provider !== 'mock') throw new BadRequestException('Ce paiement ne passe pas par la passerelle de démonstration.');
     if (payment.status === 'succeeded') return this.receipt(payment.id);
 
-    const number = card.cardNumber.replace(/\s+/g, '');
-    if (!/^\d{13,19}$/.test(number) || !luhn(number)) throw new BadRequestException('Numéro de carte invalide.');
-    const [mm, yy] = card.expiry.split('/').map((x) => Number(x));
-    const year = yy < 100 ? 2000 + yy : yy;
-    if (!(mm >= 1 && mm <= 12) || new Date(year, mm, 1).getTime() <= Date.now()) {
-      throw new BadRequestException("Date d'expiration invalide ou dépassée.");
-    }
-    if (!/^\d{3,4}$/.test(card.cvc)) throw new BadRequestException('Code de sécurité invalide.');
-    if (card.holder.trim().length < 2) throw new BadRequestException('Nom du titulaire requis.');
+    const number = validateCard(card);
 
     await new Promise((r) => setTimeout(r, 900)); // latence réaliste de la banque
     if (DECLINED[number]) {
@@ -166,6 +138,12 @@ export class PaymentsService {
       if (card) { payment.cardBrand = card.brand; payment.cardLast4 = card.last4; }
       order.status = 'paid';
       order.paidAt = now;
+      // Commission de la plateforme : le taux dépend du plan de l'artiste au moment du paiement, puis il est figé.
+      const seller = await m.findOne(User, { where: { id: order.sellerId } });
+      const rate = commissionRateFor(seller, now);
+      order.commissionRate = rate;
+      order.commissionAmount = round2(Number(order.amount) * rate);
+      order.netAmount = round2(Number(order.amount) - order.commissionAmount);
       artwork.status = 'sold';
       await m.save(payment);
       await m.save(order);

@@ -53,8 +53,14 @@ export class OrdersService {
     return this.getOne(order.id, user);
   }
 
-  listBought(userId: string) {
-    return this.view().where('o.buyerId = :userId', { userId }).getMany();
+  // La commission est une affaire entre la plateforme et l'artiste : l'acheteur ne la voit pas.
+  private hideCommission<T extends Order>(order: T): T {
+    return { ...order, commissionRate: null, commissionAmount: null, netAmount: null };
+  }
+
+  async listBought(userId: string) {
+    const orders = await this.view().where('o.buyerId = :userId', { userId }).getMany();
+    return orders.map((o) => this.hideCommission(o));
   }
 
   listSales(userId: string) {
@@ -77,7 +83,8 @@ export class OrdersService {
        FROM payments WHERE order_id = $1 AND status = 'succeeded' ORDER BY paid_at DESC LIMIT 1`,
       [id],
     );
-    return { ...order, payment: payment ?? null };
+    const view = order.seller.id === user.userId || user.role === 'admin' ? order : this.hideCommission(order);
+    return { ...view, payment: payment ?? null };
   }
 
   // 2. L'artiste accepte : l'œuvre est réservée pour cet acheteur, les autres demandes sont refusées.

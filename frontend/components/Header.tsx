@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from './AuthProvider';
 import Avatar from './Avatar';
+import ThemeToggle from './ThemeToggle';
 
 const ROLE_LABEL = { admin: 'Administrateur', artist: 'Artiste', buyer: 'Acheteur' } as const;
 
@@ -67,9 +68,12 @@ export default function Header() {
           <Link href="/" className="nav-link nav-link--optional" aria-current={pathname === '/' ? 'page' : undefined}>
             Œuvres
           </Link>
+          {ready && user?.role !== 'buyer' && user?.role !== 'admin' && link('/pricing', 'Tarifs')}
           {ready && user?.role === 'artist' && link('/artist', 'Espace artiste')}
           {ready && user?.role === 'admin' && link('/admin', 'Administration')}
           {ready && user && link('/messages', 'Messages', unread > 0 ? <span className="nav-badge" aria-label={`${unread} non lus`}>{unread}</span> : null)}
+
+          <ThemeToggle />
 
           {ready && user ? (
             <div className="menu" ref={menuRef}>
@@ -86,6 +90,7 @@ export default function Header() {
                   <Link href="/account" role="menuitem">Mon profil</Link>
                   {user.role !== 'admin' && <Link href="/orders" role="menuitem">Mes achats</Link>}
                   {user.role === 'artist' && <Link href="/artist" role="menuitem">Mes œuvres et demandes</Link>}
+                  {user.role === 'artist' && <Link href="/artist?tab=subscription" role="menuitem">Mon abonnement</Link>}
                   {user.role === 'admin' && <Link href="/admin" role="menuitem">Administration</Link>}
                   <button type="button" role="menuitem" onClick={signOut}>Se déconnecter</button>
                 </div>

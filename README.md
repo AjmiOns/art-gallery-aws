@@ -87,9 +87,21 @@ Le réseau actuellement déployé (VPC, trois niveaux de sous-réseaux, NAT, gro
 |---|---|
 | **Visiteur** | Parcourir le catalogue par catégorie, rechercher, filtrer par prix, trier, consulter la fiche d'une œuvre |
 | **Acheteur** | Demander l'achat d'une œuvre avec un message, suivre ses demandes, payer par carte, imprimer un reçu, écrire aux artistes |
-| **Artiste** | Publier, modifier et supprimer ses œuvres (avec image), accepter ou refuser les demandes, contacter les acheteurs, suivre ses ventes et revenus |
-| **Administrateur** | Statistiques, gestion des utilisateurs, des œuvres, des commandes et des catégories, contact de tout utilisateur |
-| **Tous les comptes** | Profil modifiable, changement de mot de passe |
+| **Artiste** | Publier, modifier et supprimer ses œuvres (avec image), accepter ou refuser les demandes, contacter les acheteurs, suivre ses ventes (brut, commission, net), choisir un abonnement Gratuit, Premium ou Pro |
+| **Administrateur** | Statistiques (dont commissions et abonnements perçus), gestion des utilisateurs, des œuvres, des commandes et des catégories, contact de tout utilisateur |
+| **Tous les comptes** | Profil modifiable, changement de mot de passe, thème clair ou sombre (bouton dans l'en-tête, mémorisé, suit le réglage de l'appareil par défaut) |
+
+### Abonnements et commissions
+
+La plateforme prélève une **commission sur chaque vente**, dont le taux dépend de l'abonnement de l'artiste. Les prix, taux et limites sont définis à un seul endroit : [`backend/src/subscriptions/plans.ts`](backend/src/subscriptions/plans.ts).
+
+| Plan | Prix mensuel | Prix annuel | Commission | Œuvres en ligne | Avantages |
+|---|---:|---:|---:|---:|---|
+| **Gratuit** | 0 | 0 | 15 % | 10 | Publication et messagerie |
+| **Premium** | 29 | 290 (2 mois offerts) | 8 % | 50 | Badge, œuvres en tête du catalogue |
+| **Pro** | 79 | 790 (2 mois offerts) | 3 % | illimité | Badge, œuvres en tête du catalogue |
+
+Les montants sont dans la devise de la plateforme (`CURRENCY`). Le taux de commission est **figé au moment du paiement** de chaque commande : changer de plan plus tard ne modifie pas les ventes passées.
 
 Les pages correspondantes sont décrites dans [frontend](frontend/README.md#pages-par-rôle) et les règles métier dans [backend](backend/README.md#règles-métier).
 

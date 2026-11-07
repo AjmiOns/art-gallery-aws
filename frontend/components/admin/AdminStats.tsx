@@ -42,7 +42,7 @@ export default function AdminStats() {
 
   if (error) return <p className="form-error" role="alert">{error}</p>;
   if (!stats) return <p className="muted">Chargement des statistiques…</p>;
-  const { users, artworks, orders, revenue } = stats;
+  const { users, artworks, orders, revenue, platform, plans } = stats;
   const maxArt = Math.max(...stats.byCategory.map((c) => c.artworks), 1);
 
   return (
@@ -50,6 +50,8 @@ export default function AdminStats() {
       <div className="kpis">
         <div className="kpi kpi--accent"><span>Chiffre d&apos;affaires</span><strong>{formatPrice(revenue.total)}</strong><small>{revenue.payments} paiement{revenue.payments > 1 ? 's' : ''}</small></div>
         <div className="kpi"><span>30 derniers jours</span><strong>{formatPrice(revenue.last30)}</strong></div>
+        <div className="kpi"><span>Commissions perçues</span><strong>{formatPrice(platform.commissions)}</strong><small>{formatPrice(platform.commissionsLast30)} sur 30 jours</small></div>
+        <div className="kpi"><span>Abonnements vendus</span><strong>{formatPrice(platform.subscriptions)}</strong><small>{plans.premium} Premium · {plans.pro} Pro · {plans.free} gratuits</small></div>
         <div className="kpi"><span>Utilisateurs</span><strong>{users.total}</strong><small>{users.artists} artistes · {users.buyers} acheteurs{users.suspended ? ` · ${users.suspended} suspendu(s)` : ''}</small></div>
         <div className="kpi"><span>Œuvres</span><strong>{artworks.total}</strong><small>{artworks.available} dispo · {artworks.reserved} réservées · {artworks.sold} vendues</small></div>
         <div className="kpi"><span>Demandes à traiter</span><strong>{orders.pending}</strong><small>{orders.accepted} en attente de paiement</small></div>

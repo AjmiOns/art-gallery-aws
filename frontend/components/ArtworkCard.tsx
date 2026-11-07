@@ -4,6 +4,7 @@ import type { Artwork } from '@/lib/api';
 import { formatPrice } from '@/lib/format';
 import ArtImage from './ArtImage';
 import Avatar from './Avatar';
+import PlanBadge from './PlanBadge';
 import { useCategories } from './CategoriesProvider';
 
 export default function ArtworkCard({ artwork, onOpen }: { artwork: Artwork; onOpen: (a: Artwork) => void }) {
@@ -31,6 +32,7 @@ export default function ArtworkCard({ artwork, onOpen }: { artwork: Artwork; onO
           <span className="card__artist">
             <Avatar name={artist} size={24} />
             {artist}
+            <PlanBadge plan={artwork.owner?.plan} />
           </span>
           <span className="card__price">{formatPrice(artwork.price)}</span>
         </span>

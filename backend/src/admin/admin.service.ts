@@ -30,6 +30,16 @@ export class AdminService {
     const revenue = await this.one(`SELECT COALESCE(SUM(amount), 0)::float AS total,
       COALESCE(SUM(amount) FILTER (WHERE paid_at > now() - interval '30 days'), 0)::float AS last30,
       COUNT(*)::int AS payments FROM payments WHERE status = 'succeeded'`);
+    // Revenus de la plateforme : commissions sur les ventes + abonnements artistes
+    const platform = await this.one(`SELECT
+      (SELECT COALESCE(SUM(commission_amount), 0)::float FROM orders WHERE status = 'paid') AS commissions,
+      (SELECT COALESCE(SUM(commission_amount) FILTER (WHERE paid_at > now() - interval '30 days'), 0)::float FROM orders WHERE status = 'paid') AS "commissionsLast30",
+      (SELECT COALESCE(SUM(amount), 0)::float FROM subscriptions WHERE status = 'succeeded') AS subscriptions,
+      (SELECT COALESCE(SUM(amount) FILTER (WHERE paid_at > now() - interval '30 days'), 0)::float FROM subscriptions WHERE status = 'succeeded') AS "subscriptionsLast30"`);
+    const plans = await this.one(`SELECT
+      COUNT(*) FILTER (WHERE role = 'artist' AND plan = 'premium' AND plan_expires_at > now())::int AS premium,
+      COUNT(*) FILTER (WHERE role = 'artist' AND plan = 'pro' AND plan_expires_at > now())::int AS pro,
+      COUNT(*) FILTER (WHERE role = 'artist' AND NOT (plan <> 'free' AND plan_expires_at > now()))::int AS free FROM users`);
     const byCategory = await this.dataSource.query(`SELECT c.slug, c.label, c.tone,
       COUNT(a.id)::int AS artworks,
       COUNT(a.id) FILTER (WHERE a.status = 'sold')::int AS sold,
@@ -46,6 +56,6 @@ export class AdminService {
       COUNT(o.id)::int AS sales, COALESCE(SUM(o.amount), 0)::float AS revenue
       FROM users u JOIN orders o ON o.seller_id = u.id AND o.status = 'paid'
       GROUP BY u.id, u.username ORDER BY revenue DESC LIMIT 5`);
-    return { users, artworks, orders, revenue, byCategory, daily, topArtists };
+    return { users, artworks, orders, revenue, platform, plans, byCategory, daily, topArtists };
   }
 }
