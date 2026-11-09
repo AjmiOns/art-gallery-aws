@@ -1,6 +1,6 @@
 <!--
 TODO before submission (delete this block when done):
-1. Every image line below points to images/screenshots/v2-NN-name.png. Add the screenshot with that exact name.
+1. Every [ADD SCREENSHOT] marker names the file to add in images/screenshots/. The other screenshots are listed in EVIDENCE.md (same folder).
 2. Blur the admin IP, the AWS account ID and any password in each screenshot.
 3. Fill every "___" in the measurement tables (real-mode apply time, destroy time, artifact sizes, test results).
 4. Never screenshot the output of `--with-decryption` (it prints a secret).
@@ -16,6 +16,9 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
 - Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer.
+- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch, k6 load test.
+
+> **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
 
 > Rule of the course: nothing is built by hand in the AWS console. Everything is created and destroyed with Terraform (or, for the persistent buckets, a documented AWS CLI script). The console is used **only to look**, and this document shows resources with the **AWS CLI**.
 
@@ -34,11 +37,14 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Build time](#build-time)
 - [Cost](#cost)
 - [Verification with the AWS CLI (every resource)](#verification-with-the-aws-cli-every-resource)
+- [Tests](#tests)
 - [Non-functional objectives](#non-functional-objectives)
 - [Roadmap (future work)](#roadmap-future-work)
+- [Known limits](#known-limits)
 - [Security notes](#security-notes)
 - [Troubleshooting](#troubleshooting)
 - [Appendix: L3 baseline (29 resources)](#appendix-l3-baseline-29-resources)
+- [Full screenshot evidence (EVIDENCE.md)](EVIDENCE.md)
 
 ## At a glance
 
@@ -57,7 +63,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 
 Editable source: `images/architecture-v2.1.drawio` (draw.io).
 
-![Architecture version 2](images/architecture-v2.1.jpg)
+![Architecture version 2](images/architecture-v3.drawio%20(1).png)
 
 ```
 Customers -> Internet Gateway -> ALB :80 (public subnets 1+2, health check /api/health)
@@ -111,11 +117,14 @@ Constraints that decide the answer:
 
 | # | Option | How it works | Weight per new version | Boot work | On the cahier list | Main drawback | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1 | **Plain artifacts in S3** | The application is built once and packed into two versioned `.tar.gz` files (backend, frontend) uploaded to S3. `user_data` downloads them, installs production dependencies and starts the services with systemd | **A few MB** (backend 7.9 MB, frontend 203 KB) | `dnf install nginx nodejs`, `aws s3 cp`, `npm ci` (~25 s) | Yes (S3, LT, user_data) | `npm ci` needs the npm registry at boot (through the NAT) | **Chosen** |
+| 1 | **Plain artifacts in S3** | The application is built once and packed into two versioned `.tar.gz` files (backend, frontend) uploaded to S3. `user_data` downloads them, installs production dependencies and starts the services with systemd | **A few MB** (backend ___ MB, frontend ___ MB) | `dnf install nginx nodejs`, `aws s3 cp`, `npm ci` (~25 s) | Yes (S3, LT, user_data) | `npm ci` needs the npm registry at boot (through the NAT) | **Chosen** |
 | 2 | Docker image as tarball in S3 | `docker build`, `docker save`, upload tar. `user_data` installs Docker, `docker load`, `docker run` | ~224 MB, whole file every time | Install Docker, load image | Yes (S3) | Heavy upload, Docker daemon on 1 GB RAM, IMDS hop-limit setting needed | Rejected |
 | 3 | Docker image in **ECR** | `docker push` / `docker pull` with the instance role | Only changed layers (~224 MB first time) | Install Docker, log in, pull | **Grey zone** (not listed, not forbidden) | Permissions in the Learner Lab unverified, Docker daemon on 1 GB RAM, repository to clean | Kept as a **possible upgrade**, not built |
-
-
+| 4 | ECS (EC2 or Fargate) | Container service schedules the containers | Image in ECR | Task definitions, services | **No** (replaces the required ASG design) | Changes the architecture the grading expects | Rejected |
+| 5 | EKS (Kubernetes) | Managed control plane | Image in ECR | Cluster, node groups, manifests | **No** | About +0.10 USD/h for the control plane alone, large complexity | Rejected |
+| 6 | `git clone` + build on the instance | Instance clones the repo and builds | Zero upload | Needs git credentials, `npm run build` on 1 GB RAM, slow and heavy | Needs a secret or public repo | Not reproducible, build can run out of memory, slower boot | Rejected |
+| 7 | Pre-baked AMI (Packer) | Image already contains the app | New AMI per version | Fastest boot | Extra tool, not in course | More tooling, AMI storage, rebuild of the AMI at each change | Rejected (over-engineering) |
+| 8 | Elastic Beanstalk | AWS manages EC2/ASG/ALB from a zip | Zip upload | Managed | **No** | Hides the infrastructure the course wants us to write in Terraform | Rejected |
 
 ### Why option 1 (plain artifacts in S3)
 
@@ -137,6 +146,8 @@ What we give up, and why it is acceptable:
 ### Why not ECR (and what changes if we add it later)
 
 ECR is technically a good service and is billed by storage (about 0.10 USD per GB per month), not by the hour, so it would be consistent with the "destroy hourly-billed resources" rule. We did not build on it because it is **not on the closed §4 list**, because the Docker daemon costs RAM and boot time on a `t3.micro`, and because option 1 already meets every requirement. The registry would live in `bootstrap/` (never destroyed), only the download step in `user_data` would change, and `destroy.sh` would need an ECR check in its leftover list.
+
+> Check that no ECR repository is left over from earlier experiments (see [leftover check](#leftover-check)): `aws ecr describe-repositories`.
 
 ### Entry point: one origin behind the ALB
 
@@ -267,7 +278,7 @@ nano terraform.tfvars        # admin_cidr = "YOUR.IP/32", unique_suffix = "<same
 
 Each variable name must appear **once** in the file (a duplicated line keeps the last value and is easy to miss).
 
-![admin IP and tfvars](images/screenshots/v2-01-tfvars.png)
+*Screenshot: [admin IP and tfvars](EVIDENCE.md#2-configure)*
 
 ### 3. Bootstrap (once)
 
@@ -275,9 +286,7 @@ Each variable name must appear **once** in the file (a duplicated line keeps the
 cd bootstrap && ./bootstrap.sh <unique_suffix> && cd ..
 ```
 
-
-
-![bootstrap](images/screenshots/v2-02-bootstrap.png)
+*Screenshot: [bootstrap](EVIDENCE.md#3-bootstrap-once)*
 
 ### 4. Upload the artifacts (only when the code changes)
 
@@ -296,9 +305,7 @@ aws s3 cp /tmp/frontend-v1.tar.gz s3://art-gallery-data-<suffix>/artifacts/
 
 The version in the file names must match the Terraform variable `app_version` (default `v1`).
 
-
-
-![artifact sizes and upload](images/screenshots/v2-03-artifacts.png)
+*Screenshot: [artifact sizes and upload](EVIDENCE.md#4-upload-the-artifacts-only-when-the-code-changes)*
 
 ### 5. Deploy
 
@@ -310,8 +317,7 @@ terraform plan                       # expected: Plan: 41 to add
 time terraform apply -auto-approve   # about 11 minutes, RDS is the slowest
 ```
 
-![terraform plan summary](images/screenshots/v2-04-plan.png)
-
+*Screenshot: [terraform plan summary](EVIDENCE.md#5-deploy)*
 
 ![terraform apply complete and outputs](images/screenshots/v2-05-apply-complete.png)
 
@@ -320,8 +326,6 @@ terraform output app_url                                # open it in a browser
 curl "$(terraform output -raw health_url)"
 eval "$(terraform output -raw read_admin_password)"     # admin password of this session
 ```
-
-
 
 ![the site in the browser](images/screenshots/v2-06-site.png)
 
@@ -333,8 +337,7 @@ time ./destroy.sh
 
 The script runs `terraform destroy`, then checks EC2, NAT Gateways, Elastic IPs, load balancers and RDS. It must finish with `OK: nothing billable left.` RDS takes several minutes to delete, so do not close the terminal early.
 
-
-![destroy and leftover check](images/screenshots/v2-07-destroy.png)
+*Screenshot: [destroy and leftover check](EVIDENCE.md#6-destroy-mandatory-at-the-end-of-every-session)*
 
 ## Build time
 
@@ -359,11 +362,15 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 
 | Measurement | Command | Result |
 |---|---|---|
-| Full apply, real mode (artifacts in S3) | `time terraform apply -auto-approve` | 12 min 11 s |
-| Destroy and leftover check | `time ./destroy.sh` | 4 min 2 s |
+| Full apply, real mode (artifacts in S3) | `time terraform apply -auto-approve` | ___ min ___ s |
+| Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s |
 | Replacement of a killed instance (until `healthy`) | see [T7](#t7-resilience-kill-one-instance) | ___ min |
 | Rolling update to `v2` | see [T8](#t8-new-version-without-total-interruption) | ___ min |
 | Rebuild target (L1) | 15 minutes or less | Met in fallback mode (11.5 min). Real mode: ___ |
+
+> **[ADD SCREENSHOT]** `v2-08-timing.png`: timing of apply and destroy
+
+![timing of apply and destroy](images/screenshots/v2-08-timing.png)
 
 ## Cost
 
@@ -417,8 +424,7 @@ aws ce get-cost-and-usage --time-period Start=2026-11-01,End=2026-11-09 \
   --granularity DAILY --metrics UnblendedCost --query 'ResultsByTime[].[TimePeriod.Start,Total.UnblendedCost.Amount]' --output table
 ```
 
-
-![cost evidence](images/screenshots/v2-09-cost.png)
+*Screenshot: [cost evidence](EVIDENCE.md#check-what-was-actually-spent)*
 
 ## Verification with the AWS CLI (every resource)
 
@@ -442,7 +448,6 @@ terraform state list | grep -vE '(^|\.)data\.' | wc -l          # expected: 41 (
 terraform output
 ```
 
-
 ![identity, resource count, outputs](images/screenshots/v2-10-identity-state.png)
 
 ### V1. Inventory of everything tagged for the project
@@ -454,8 +459,7 @@ aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=art-
 
 If this call is denied in the lab, skip it: the blocks below cover each resource type. (Some resources, such as route table associations, are not taggable, so the count is lower than 41.)
 
-
-![tagged resource inventory](images/screenshots/v2-11-tag-inventory.png)
+*Screenshot: [tagged resource inventory](EVIDENCE.md#v1-inventory-of-everything-tagged-for-the-project)*
 
 ### V2. Persistent buckets and artifacts
 
@@ -472,9 +476,7 @@ aws s3 ls s3://$DATA/artifacts/ --human-readable
 
 Expected: all four public-access settings `True`, encryption `AES256`, versioning `Enabled` on the state bucket, and both `.tar.gz` artifacts listed.
 
-
-![S3 buckets ](images/screenshots/v2-12-s3.png)
-![S3 artifacts](images/screenshots/v2-12.1-s3.png)
+*Screenshot: [S3 buckets and artifacts](EVIDENCE.md#v2-persistent-buckets-and-artifacts)*
 
 ### V3. VPC and subnets
 
@@ -487,7 +489,6 @@ aws ec2 describe-subnets --filters Name=vpc-id,Values=$VPC \
 ```
 
 Expected: `10.0.0.0/16` and 6 subnets over `us-east-1a` / `us-east-1b` (`MapPublicIpOnLaunch` true only for the 2 public ones, if set in the module).
-
 
 ![VPC and subnets](images/screenshots/v2-13-vpc-subnets.png)
 
@@ -509,8 +510,7 @@ aws ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=$VPC \
 
 Expected: IGW `available`, NAT `available` and `public` in a public subnet, an Elastic IP attached to the NAT, an S3 endpoint of type `Gateway` (keep the NAT public IP: [T6](#t6-outbound-access-goes-through-the-nat-gateway) compares it).
 
-![gateways and endpoint](images/screenshots/v2-14-gateways.png)
-![gateways and endpoint](images/screenshots/v2-14.1-gateways.png)
+*Screenshot: [gateways and endpoint](EVIDENCE.md#v4-internet-gateway-nat-gateway-elastic-ip-s3-endpoint)*
 
 ### V5. Route tables
 
@@ -522,7 +522,7 @@ aws ec2 describe-route-tables --filters Name=vpc-id,Values=$VPC \
 
 Expected: `rt-public` (2 subnets) has `0.0.0.0/0` to the Internet Gateway, `rt-app` (2 subnets) has `0.0.0.0/0` to the NAT Gateway, `rt-db` (2 subnets) has **only the local route**. The unnamed table is the VPC's automatic main route table (0 subnets).
 
-![route tables](images/screenshots/v2-15-route-tables.png)
+*Screenshot: [route tables](EVIDENCE.md#v5-route-tables)*
 
 ### V6. Security groups and their rules
 
@@ -545,7 +545,7 @@ aws ec2 describe-instances --filters Name=tag:Project,Values=art-gallery Name=in
 
 Expected: 1 `art-gallery-bastion` with a public IP, 2 `art-gallery-app` in **different AZs** and with **no public IP** (blur the bastion IP).
 
-![instances](images/screenshots/v2-17-instances.png)
+*Screenshot: [instances](EVIDENCE.md#v7-instances-bastion-and-application)*
 
 ### V8. Launch Template and Auto Scaling Group
 
@@ -562,9 +562,7 @@ aws ec2 describe-launch-template-versions --launch-template-id $LT --versions '$
 
 Expected: min 2, max 3, desired 2, health check `ELB`, 2 instances `InService` / `Healthy` in two AZs. Launch template: `t3.micro`, `LabInstanceProfile`, `HttpTokens: required`, encrypted 8 GB gp3 volume.
 
-
-![auto scaling group](images/screenshots/v2-18-asg-lt.png)
-![launch template](images/screenshots/v2-18.1-asg-lt.png)
+*Screenshot: [auto scaling group and launch template](EVIDENCE.md#v8-launch-template-and-auto-scaling-group)*
 
 ### V9. Load balancer, listener, target group, target health
 
@@ -586,9 +584,7 @@ aws elbv2 describe-target-health --target-group-arn $TG \
 
 Expected: `internet-facing` `application` ALB `active` in 2 AZs, listener `80 HTTP forward`, health path `/api/health` every 15 s, **both targets `healthy`**.
 
-
 ![load balancer and target health](images/screenshots/v2-19-alb-targets.png)
-![load balancer and target health](images/screenshots/v2-19.1-alb-targets.png)
 
 ### V10. RDS
 
@@ -603,7 +599,6 @@ aws rds describe-db-parameters --db-parameter-group-name $PG \
 
 Expected: `available`, PostgreSQL 16, `db.t3.micro`, `Public: false`, `Encrypted: true`, 7 backup days, endpoint in the DB subnets, `rds.force_ssl` = `0` (documented limit).
 
-
 ![RDS](images/screenshots/v2-20-rds.png)
 
 ### V11. Secrets (names and type only, never the values)
@@ -615,8 +610,226 @@ aws ssm describe-parameters --parameter-filters Key=Name,Option=BeginsWith,Value
 
 Expected: 3 parameters of type `SecureString`. **Do not** add `get-parameter --with-decryption` to a screenshot.
 
+*Screenshot: [SSM parameters](EVIDENCE.md#v11-secrets-names-and-type-only-never-the-values)*
 
-![SSM parameters](images/screenshots/v2-21-ssm.png)
+### Leftover check
+
+After `./destroy.sh`, the same check as the script, written out so it can be shown:
+
+```bash
+aws ec2 describe-instances --filters Name=instance-state-name,Values=pending,running,stopping,stopped --query 'Reservations[].Instances[].InstanceId' --output text
+aws ec2 describe-nat-gateways --filter Name=state,Values=pending,available --query 'NatGateways[].NatGatewayId' --output text
+aws ec2 describe-addresses --query 'Addresses[].AllocationId' --output text
+aws elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerArn' --output text
+aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier' --output text
+aws ecr describe-repositories --query 'repositories[].repositoryName' --output text   # old experiments
+aws s3api list-buckets --query "Buckets[?starts_with(Name,'art-gallery-')].Name" --output text   # expected: the 2 persistent buckets
+```
+
+Expected: every line empty except the 2 persistent buckets.
+
+> **[ADD SCREENSHOT]** `v2-22-leftover.png`: leftover check
+
+![leftover check](images/screenshots/v2-22-leftover.png)
+
+## Tests
+
+Each test: what it proves, the commands, the expected result, a screenshot. Run T1 to T6 on a fresh apply, then the destructive ones (T7, T8) and finish with T10.
+
+| # | Test | Proves | Status |
+|---|---|---|---|
+| T1 | Health endpoint | ALB, target group, API alive | to capture |
+| T2 | Frontend and DB-backed API through the single URL | nginx serves the pages and proxies `/api`, DB reachable | done (200 and `[]`), screenshot to add |
+| T3 | Instances booted in real mode, secrets read | Artifacts, SSM access, no fallback | to capture |
+| T4 | Database reachable only from the app tier | Network isolation | to capture |
+| T5 | Private instances not reachable from the Internet | Security groups, no public IP | to capture |
+| T6 | Outbound goes through the NAT | NAT route works | done in L3, repeat on v2 |
+| T7 | Resilience: kill one instance | Fault tolerance (graded) | to do |
+| T8 | New version without total interruption | Rolling update | to do |
+| T9 | Backup and restore | Data protection (graded) | to do |
+| T10 | Rebuild from zero, timed | Rebuild target | partly done (11.5 min fallback) |
+| T11 | Load test (k6) | 50 concurrent users, 100 peak | planned |
+
+### T1. Health endpoint
+
+```bash
+URL=$(terraform output -raw app_url)
+curl -s "$(terraform output -raw health_url)"; echo
+```
+
+Expected: JSON with a healthy status (`fallback` means the artifacts were not found, see T3).
+
+*Screenshot: [T1 health](EVIDENCE.md#t1-health-endpoint)*
+
+### T2. Frontend and API through the one URL
+
+```bash
+curl -s -o /dev/null -w "frontend: %{http_code}\n" "$URL/"
+curl -s "$URL/api/artworks" | head -c 300; echo
+```
+
+Expected: `frontend: 200`, and a JSON answer from a route that reads the database (`/api/artworks` here, defined by the [backend](../backend/README.md)): it proves the path ALB, instance, RDS works. An empty list is fine on a new database. A `500` means the API cannot reach the database.
+
+*Screenshot: [T2 frontend and API](EVIDENCE.md#t2-frontend-and-api-through-the-one-url)*
+
+### T3. Real mode and secrets
+
+```bash
+eval "$(ssh-agent -s)"; ssh-add ~/path/to/labsuser.pem
+eval "$(terraform output -raw list_app_instances)"          # private IPs
+ssh -J ec2-user@$(terraform output -raw bastion_public_ip) ec2-user@<private-ip>
+```
+
+On the instance:
+
+```bash
+sudo grep -E "=== mode:|rror|enied" /var/log/art-gallery-boot.log
+systemctl is-active art-gallery nginx
+```
+
+Expected: `=== mode: real`, **no** `AccessDenied`, both services `active`.
+
+*Screenshot: [T3 boot log](EVIDENCE.md#t3-real-mode-and-secrets)*
+
+### T4. Database reachable from the app tier only
+
+On your **laptop**, get the host name (the output ends with `:5432`, which is cut off here):
+
+```bash
+terraform output -raw rds_endpoint | cut -d: -f1
+```
+
+Copy the result, then on an **app instance** (inside the SSH session above) paste it into a variable and test. Do not type the `<` `>` signs: bash would read them as redirections.
+
+```bash
+DB=art-gallery-db.xxxxxxxx.us-east-1.rds.amazonaws.com      # your real value
+timeout 3 bash -c "</dev/tcp/$DB/5432" && echo "DB port open" || echo "blocked"
+```
+
+On the **bastion** (a different security group, so it must fail), set `DB` the same way and run the same test:
+
+```bash
+ssh ec2-user@$(terraform output -raw bastion_public_ip)
+timeout 3 bash -c "</dev/tcp/$DB/5432" && echo "DB port open" || echo "blocked (expected)"
+```
+
+Expected: `DB port open` from the app instance, `blocked (expected)` from the bastion. Together with `Public: false` in V10, this shows the database is not exposed.
+
+![T4 database access](images/screenshots/v2-26-t4-db-isolation.png)
+
+### T5. Private instances are not reachable from the Internet
+
+```bash
+# App instances have no public IP (V7 shows the empty column). From your laptop, the private IP must time out:
+curl -m 5 http://<app-private-ip>/ ; echo "exit code: $?"      # expected: timeout, exit code 28
+# Direct SSH to an app instance without the bastion must fail:
+ssh -o ConnectTimeout=5 ec2-user@<app-private-ip>               # expected: timeout
+# On an app instance, IMDSv1 must be refused (IMDSv2 required):
+curl -s -o /dev/null -w "%{http_code}\n" http://169.254.169.254/latest/meta-data/    # expected: 401
+```
+
+*Screenshot: [T5 no direct access](EVIDENCE.md#t5-private-instances-are-not-reachable-from-the-internet)*
+
+### T6. Outbound access goes through the NAT Gateway
+
+From an app instance:
+
+```bash
+curl -s https://ifconfig.me; echo
+```
+
+Expected: the **same public IP as the NAT Gateway** in V4, not an address of the instance.
+
+*Screenshot: [T6 NAT outbound IP](EVIDENCE.md#t6-outbound-access-goes-through-the-nat-gateway)*
+
+### T7. Resilience: kill one instance
+
+Terminal 1, a check every 2 seconds:
+
+```bash
+cd ~/projet/art-gallery-aws/infra
+while true; do echo "$(date +%T) $(curl -s -o /dev/null -w '%{http_code}' "$(terraform output -raw health_url)")"; sleep 2; done
+```
+
+Terminal 2:
+
+```bash
+eval "$(terraform output -raw list_app_instances)"            # note an instance id
+aws ec2 terminate-instances --instance-ids <id>
+
+aws autoscaling describe-scaling-activities --auto-scaling-group-name art-gallery-asg --max-items 3 \
+  --query 'Activities[].[StartTime,StatusCode,Description]' --output table
+
+TG=$(aws elbv2 describe-target-groups --names art-gallery-tg --query 'TargetGroups[0].TargetGroupArn' --output text)
+aws elbv2 describe-target-health --target-group-arn $TG \
+  --query 'TargetHealthDescriptions[].[Target.Id,TargetHealth.State]' --output table
+```
+
+Expected: the loop keeps printing `200` (an occasional non-200 for a few seconds is normal while the ALB notices the dead target, note it), the ASG launches a replacement within minutes, and target health returns to 2 `healthy`. Record the time until the replacement is `healthy`: ___ min.
+
+> **[ADD SCREENSHOT]** `v2-29-t7-loop.png`: T7 loop
+
+![T7 loop](images/screenshots/v2-29-t7-loop.png)
+
+*Screenshot: [T7 scaling activities](EVIDENCE.md#t7-resilience-kill-one-instance)*
+
+> **[ADD SCREENSHOT]** `v2-31-t7-targets.png`: T7 target health
+
+![T7 target health](images/screenshots/v2-31-t7-targets.png)
+
+### T8. New version without total interruption
+
+```bash
+# upload backend-v2 / frontend-v2 (same commands as above, v2 in the file names), then:
+terraform apply -var app_version=v2     # rolling replacement, one instance at a time
+```
+
+While it runs, keep the loop from T7 open. Expected: the answers stay `200` and the instances are replaced one by one (`aws autoscaling describe-instance-refreshes --auto-scaling-group-name art-gallery-asg`). Rollback is `terraform apply -var app_version=v1`.
+
+*Screenshot: [T8 rolling update](EVIDENCE.md#t8-new-version-without-total-interruption)*
+
+### T9. Backup and restore
+
+```bash
+aws rds create-db-snapshot --db-instance-identifier art-gallery-db --db-snapshot-identifier art-gallery-manual-1
+aws rds wait db-snapshot-available --db-snapshot-identifier art-gallery-manual-1
+./destroy.sh
+terraform apply -var db_snapshot_identifier=art-gallery-manual-1
+curl -s "$(terraform output -raw app_url)/api/artworks" | head -c 300; echo      # the data is back
+```
+
+Also show that automated backups and point-in-time recovery are on: `aws rds describe-db-instances --db-instance-identifier art-gallery-db --query 'DBInstances[0].[BackupRetentionPeriod,LatestRestorableTime]'`.
+
+> **[ADD SCREENSHOT]** `v2-33-t9-restore.png`: T9 snapshot and restore
+
+![T9 snapshot and restore](images/screenshots/v2-33-t9-restore.png)
+
+### T10. Rebuild from zero, timed
+
+After a full `./destroy.sh` (leftover check clean):
+
+```bash
+time terraform apply -auto-approve
+curl -s "$(terraform output -raw health_url)"; echo
+```
+
+Expected: 15 minutes or less and a healthy application. Result: ___ min ___ s.
+
+*Screenshot: [T10 rebuild time](EVIDENCE.md#t10-rebuild-from-zero-timed)*
+
+### T11. Load test (planned)
+
+k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and error rate, while watching `aws autoscaling describe-auto-scaling-groups`. Script and results to add.
+
+## Non-functional objectives
+
+| Objective | Target | Status |
+|---|---|---|
+| Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: T7 |
+| Load | 50 concurrent users (100 peak) | k6 test planned (T11) |
+| Rebuild time | 15 minutes or less | **11.5 min measured** in fallback mode. Real mode: ___ |
+| Max data loss | 5 minutes or less | RDS automated backups (7 days) with point-in-time recovery enabled. Restore demonstration: T9 |
+| Budget | 50 USD or less | About 0.15 USD/h, destroy after every session, single NAT, `t3.micro` |
 
 ## Roadmap (future work)
 
@@ -668,7 +881,7 @@ Expected: 3 parameters of type `SecureString`. **Do not** add `get-parameter --w
 | Problem | Fix |
 |---|---|
 | `Permission denied: ./destroy.sh` | `chmod +x destroy.sh` |
-| `ExpiredToken` / auth error | Restart the lab, paste new credentials |
+| `ExpiredToken` / auth error, or `UnauthorizedOperation ... explicit deny ... voc-cancel-cred` | The lab session ended or was cancelled and the old credentials are blocked. Start the lab again, paste the new credentials into `~/.aws/credentials`, check with `aws sts get-caller-identity` |
 | SSH to bastion hangs | Your IP changed: update `admin_cidr`, `terraform apply` |
 | `Permission denied (publickey)` | `ssh-add labsuser.pem`, check with `ssh-add -l` |
 | `plan` fails on `data.aws_s3_bucket.data` | `bootstrap.sh` not run, or `unique_suffix` differs from the one used there |
