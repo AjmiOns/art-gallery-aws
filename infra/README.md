@@ -60,7 +60,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Running cost | **about 0.15 USD per hour** (approximate, see [Cost](#cost)) |
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
 | Entry point | One public URL: the ALB (`terraform output app_url`) |
-| Persistent between sessions | 2 S3 buckets (Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh` |
+| Persistent between sessions | 2 S3 buckets (versioned and locked Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh` |
 | Uploaded images | Stored by the backend in `s3://<data bucket>/artworks/uploads/` and served at `/api/uploads/<file>` (see [S3.md](S3.md)) |
 | Database content after a rebuild | Restored by the first booting instance from `seed/gallery.sql` (no manual step). See [RDS.md](RDS.md) |
 | Destroyed every session | Everything else (`./destroy.sh`, ends with `OK: nothing billable left.`) |
