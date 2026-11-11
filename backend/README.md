@@ -63,6 +63,8 @@ Toutes les variables sont dans `backend/.env` (modèle : `backend/.env.example`,
 | `PAYMENT_PROVIDER` | `mock` (passerelle de démonstration) ou `stripe` |
 | `STRIPE_*` | Clés Stripe (mode test) |
 | `DB_SSL` | `true` pour Amazon RDS |
+| `S3_BUCKET` | Nom du bucket S3 de données. Défini, les images envoyées vont dans `s3://<bucket>/artworks/uploads/`. Absent (développement local), elles restent sur disque. Sur AWS, le script de démarrage des instances le renseigne |
+| `AWS_REGION` | Région du bucket (`us-east-1`). Les identifiants viennent du rôle de l'instance, jamais d'une clé dans le code |
 
 > **Mise à jour d'une installation existante** : ajoutez à `backend/.env` les variables `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PUBLIC_API_URL`, `CURRENCY`, `PAYMENT_PROVIDER` et `STRIPE_*` de `backend/.env.example`, relancez `npm run install:all`, puis `npm run seed -- --reset`.
 
@@ -114,7 +116,7 @@ Toutes les variables sont dans `backend/.env` (modèle : `backend/.env.example`,
 
 On écrit à l'artiste depuis la fiche d'une de ses œuvres, ou à une personne avec qui on a déjà échangé ou commandé. Les administrateurs peuvent écrire à tous et recevoir de tous. Ces règles limitent les messages non sollicités.
 
-**Images.** Les images envoyées par les artistes sont stockées sur le disque du backend (`backend/uploads`). En production elles iront sur S3, car les instances de l'Auto Scaling Group ne partagent pas de disque.
+**Images.** Les images envoyées par les artistes sont stockées sur le disque du backend (`backend/uploads`) en local. Sur AWS (`S3_BUCKET` défini), elles vont dans le bucket S3 de données, sous `artworks/uploads/`, car les instances de l'Auto Scaling Group ne partagent pas de disque. Le lien enregistré est relatif (`/api/uploads/<uuid>.jpg`) et reste valable quand l'adresse du load balancer change. Le bucket reste privé : l'API lit le fichier dans S3 et le renvoie (`GET /api/uploads/<uuid>.<jpg|png|webp>`, noms stricts uniquement). Détails et commandes : [`infra/S3.md`](../infra/S3.md).
 
 ## Modèle de données
 
@@ -234,7 +236,8 @@ Commandes utiles : `\dt` liste les tables, `\d artworks` décrit une table, `\q`
 | Origine | Valeur de `image_url` | Emplacement du fichier |
 |---|---|---|
 | Bibliothèque intégrée | `/artworks/painting/painting-01.jpg` | `frontend/public/artworks/` |
-| Envoyée par un artiste | `http://localhost:3001/uploads/<uuid>.jpg` | `backend/uploads/` |
+| Envoyée par un artiste (local) | `http://localhost:3001/uploads/<uuid>.jpg` | `backend/uploads/` |
+| Envoyée par un artiste (AWS) | `/api/uploads/<uuid>.jpg` | `s3://<bucket>/artworks/uploads/` |
 | Lien externe | `https://…` | site distant |
 
 **Requêtes pratiques**
@@ -287,7 +290,7 @@ Les 72 images viennent de `frontend/public/artworks/<catégorie>/`. Elles sont g
 2. Le health check de l'ALB cible `GET /api/health`.
 3. Base : Amazon RDS PostgreSQL, `DB_SSL=true`, accessible uniquement depuis les sous-réseaux applicatifs.
 4. `NODE_ENV=production` (désactive `synchronize`). `JWT_SECRET`, `ADMIN_PASSWORD`, mot de passe RDS et clé Stripe dans AWS Secrets Manager. `FRONTEND_URL` réglé sur le domaine CloudFront, `PUBLIC_API_URL` sur le domaine de l'API.
-5. Images : remplacer le stockage disque par S3 (URL présignées) avant de passer à plusieurs instances.
+5. Images : avec `S3_BUCKET` et `AWS_REGION` définis (le script de démarrage s'en charge), les envois vont dans S3 et sont servis par l'API. La dépendance `@aws-sdk/client-s3` doit être dans `package.json` et `package-lock.json` (`npm install @aws-sdk/client-s3`, jamais à la main), sinon `npm ci` échoue sur les instances.
 
 > **Port** : en local l'API écoute sur `3001`. Le groupe de sécurité `app-sg` et le serveur de test de l'infrastructure utilisent `3000` pour l'instant. Aligner les deux avant de déployer l'API (voir [`infra/`](../infra/README.md#security-modulessecurity)).
 
@@ -302,7 +305,8 @@ Contraintes AWS Academy Learner Lab : rôle IAM imposé, budget limité. Voir [`
 - [x] Administration : statistiques, utilisateurs, œuvres, commandes, catégories
 - [x] Profil et changement de mot de passe
 - [ ] Migrations TypeORM
-- [ ] Stockage des images sur S3 par URL présignées
+- [x] Stockage des images sur S3 (servies par l'API, bucket privé)
+- [ ] URL présignées pour envoyer directement depuis le navigateur
 - [ ] Notifications par e-mail et réinitialisation du mot de passe
 - [ ] Webhooks Stripe, passage en mode réel
 - [ ] Tests automatisés et intégration continue (GitHub Actions)
