@@ -56,6 +56,39 @@ JS
   echo "art-gallery: artifacts $VER not found in s3://$BUCKET/artifacts/" > /usr/share/nginx/html/index.html
 fi
 
+# ---- 3b. seed the database from S3 (fresh RDS only) ----
+# s3://BUCKET/seed/gallery.sql is a pg_dump kept in the persistent data bucket.
+# It is loaded BEFORE the backend starts (otherwise the backend would create empty
+# tables first). Skipped when there is no dump, or when the users table already
+# exists. The load is one transaction (-1): if two instances race, the loser fails
+# on "already exists" and rolls back, so nothing is applied twice. A failure here
+# never stops the boot.
+seed_database() {
+  dnf install -y postgresql16 || { echo "seed: cannot install psql, skipping"; return 0; }
+  aws s3 cp "s3://$BUCKET/seed/gallery.sql" /tmp/seed.sql --region "$REGION" \
+    || { echo "seed: no dump in s3://$BUCKET/seed/, skipping"; return 0; }
+  sed -i '/^\\restrict/d;/^\\unrestrict/d' /tmp/seed.sql
+  export PGPASSWORD="$DB_PASSWORD"
+  CONN="host=${db_host} port=${db_port} dbname=${db_name} user=${db_user} sslmode=require"
+  for i in $(seq 1 30); do
+    psql "$CONN" -Atc "select 1" >/dev/null 2>&1 && break
+    sleep 10
+  done
+  HAS_USERS=$(psql "$CONN" -Atc "select to_regclass('public.users') is not null" 2>/dev/null)
+  if [ "$HAS_USERS" = "f" ]; then
+    if psql "$CONN" -v ON_ERROR_STOP=1 -1 -q -f /tmp/seed.sql >/dev/null; then
+      echo "seed: database restored from the dump"
+    else
+      echo "seed: restore failed or done by another instance (nothing applied twice)"
+    fi
+  else
+    echo "seed: users table already present (or database unreachable), skipping"
+  fi
+  rm -f /tmp/seed.sql
+  unset PGPASSWORD
+}
+seed_database
+
 # ---- 4. backend as a systemd service (restarts by itself if it crashes) ----
 cat > /etc/art-gallery.env <<EOF
 NODE_ENV=${node_env}
