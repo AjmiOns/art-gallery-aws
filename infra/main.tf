@@ -94,6 +94,7 @@ module "monitoring" {
   source = "./modules/monitoring"
 
   name                    = var.project
+  region                  = var.region
   alb_arn_suffix          = module.alb.alb_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
   db_instance_identifier  = module.rds.identifier
