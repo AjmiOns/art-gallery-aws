@@ -6,6 +6,7 @@ Companion of the [infrastructure README](README.md). It answers four questions:
 2. How do I **look inside** the database (tables, `select` on `users`, `payments`...)?
 3. How do I **keep the data created on AWS** before a destroy?
 4. What do I do when something goes wrong?
+5. How do I **prove that passwords and cards are protected** in the database (test T12)?
 
 The database is `art-gallery-db` (PostgreSQL 16, private subnets, no public access). Only the app instances can reach port 5432, so every command in sections 2 to 4 is run **on an app instance**, in a Session Manager terminal (no SSH key needed).
 
@@ -149,6 +150,80 @@ rm /tmp/gallery.sql
 
 Compare the final count with your local database:
 `docker exec art-gallery-db psql -U gallery art_gallery -c "select count(*) from users;"`
+
+## 5. Verification: passwords and cards
+
+Test **T12** of the [infrastructure README](README.md#t12-sensitive-data-passwords-and-cards). It checks, on the RDS database itself, that the sensitive data is protected. Run it in the `psql` session of section 2 (Session Manager on an app instance). The queries never print a full hash.
+
+**What the application does** (code: `backend/src/auth/auth.service.ts` and `backend/src/payments/`):
+
+| Data | How it is stored | Where |
+|---|---|---|
+| Password | **bcrypt hash** (cost 10, 60 characters, starts with `$2a$10$`). The clear password is never stored | `users.password_hash` |
+| Card number, expiry, security code | **Not stored at all.** They are checked in memory (format and Luhn check) and then discarded | nowhere |
+| Card shown on a payment | Only the brand and the **last 4 digits** | `payments.card_brand`, `payments.card_last4` (4 characters maximum) |
+
+So there is no card hash to verify: there is no card number to hash. A database leak would expose neither card numbers nor passwords.
+
+### Step 1: the `users` table has a hash column, not a password column
+
+```sql
+\d users
+```
+
+![users table](images/screenshots/v2-t12-1-users-table.png)
+
+*The only password-related column is `password_hash`. There is no clear-text password column.*
+
+### Step 2: every password is a bcrypt hash
+
+```sql
+select count(*) as utilisateurs,
+       count(*) filter (where password_hash ~ '^\$2[aby]\$10\$') as bcrypt_ok,
+       min(length(password_hash)) as longueur_min,
+       max(length(password_hash)) as longueur_max
+from users;
+```
+
+![bcrypt count](images/screenshots/v2-t12-2-bcrypt-count.png)
+
+*Result: 22 users, 22 bcrypt hashes with cost 10, all 60 characters long.*
+
+### Step 3: only the hash prefix, for a few users
+
+```sql
+select username, left(password_hash, 7) as debut_du_hash, length(password_hash) as longueur
+from users order by created_at limit 5;
+```
+
+![hash prefix](images/screenshots/v2-t12-3-hash-prefix.png)
+
+*Only the 7-character prefix `$2a$10$` and the length (60) are shown: the hashes themselves are not displayed.*
+
+### Step 4: payments keep only the brand and the last 4 digits
+
+```sql
+\d payments
+
+select card_brand, card_last4, status, created_at
+from payments order by created_at desc limit 10;
+```
+
+![payments table](images/screenshots/v2-t12-4-payments-table.png)
+
+*The table has no column for a card number or a security code. The demonstration payments use the test card ending in 4242.*
+
+### Step 5: no full card number anywhere in `payments`
+
+```sql
+select count(*) as lignes_suspectes from payments where card_last4 !~ '^\d{4}$';
+```
+
+![suspect rows](images/screenshots/v2-t12-5-card-suspect-count.png)
+
+*Result: 0 rows. Every `card_last4` is exactly four digits.*
+
+> A bcrypt hash cannot be decoded. To prove a hash matches a known password, sign in on the site with that account: the API runs `bcrypt.compare` against the stored hash. Never run `select * from users` in a screenshot: it prints every hash.
 
 ## Security
 
