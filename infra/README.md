@@ -314,6 +314,8 @@ Each variable name must appear **once** in the file (a duplicated line keeps the
 
 ```bash
 cd bootstrap && ./bootstrap.sh <unique_suffix> && cd ..
+cp backend.hcl.example backend.hcl
+# Set bucket in backend.hcl to art-gallery-tfstate-<same suffix>
 ```
 
 *Screenshot: [bootstrap](EVIDENCE.md#3-bootstrap-once)*
@@ -356,10 +358,11 @@ The file contains the users' emails and password hashes: keep it in the private 
 
 ```bash
 cd infra
-terraform init
+terraform init -backend-config=backend.hcl
 terraform validate
 terraform plan                       # expected: Plan: 41 to add
 time terraform apply -auto-approve   # about 11 minutes, RDS is the slowest
+./backup-state.sh                    # save a local copy of the remote state
 ```
 
 During the apply, the first app instance restores the seed into RDS (see [How an instance boots](#how-an-instance-boots)). Nothing to run by hand: when `apply` returns, the site already shows the data.
