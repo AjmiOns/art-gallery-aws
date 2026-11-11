@@ -10,6 +10,7 @@
 #   alb       Application Load Balancer + target group + listener
 #   rds       PostgreSQL (private DB subnets)
 #   asg       Launch Template + Auto Scaling Group (min 2, one per AZ)
+#   monitoring CloudWatch alarms for ALB target health and RDS CPU
 # ---------------------------------------------------------------------------
 
 # Ask AWS which availability zones (AZs) are currently usable in the region.
@@ -87,6 +88,16 @@ module "rds" {
   db_password            = module.secrets.db_password
   snapshot_identifier    = var.db_snapshot_identifier
   force_ssl              = var.db_force_ssl
+}
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  name                    = var.project
+  alb_arn_suffix          = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  db_instance_identifier  = module.rds.identifier
+  tags                    = local.tags
 }
 
 module "asg" {
