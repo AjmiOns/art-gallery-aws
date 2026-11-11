@@ -78,6 +78,10 @@ seed_database() {
   if [ "$HAS_USERS" = "f" ]; then
     if psql "$CONN" -v ON_ERROR_STOP=1 -1 -q -f /tmp/seed.sql >/dev/null; then
       echo "seed: database restored from the dump"
+      # Images uploaded locally were saved with a full http://localhost:3001/uploads/... link.
+      # On AWS they are served by the API from S3: make the links relative (host independent).
+      psql "$CONN" -q -c "update artworks set image_url = '/api/uploads/' || regexp_replace(image_url, '^.*/uploads/', '') where image_url ~ '^https?://[^/]+/uploads/'" \
+        && echo "seed: image links normalised" || echo "seed: image link update failed"
     else
       echo "seed: restore failed or done by another instance (nothing applied twice)"
     fi
@@ -100,6 +104,8 @@ DB_USER=${db_user}
 DB_PASSWORD=$DB_PASSWORD
 JWT_SECRET=$JWT_SECRET
 ADMIN_PASSWORD=$ADMIN_PASSWORD
+S3_BUCKET=$BUCKET
+AWS_REGION=$REGION
 FRONTEND_URL=http://${public_host}
 PUBLIC_API_URL=http://${public_host}
 EOF
