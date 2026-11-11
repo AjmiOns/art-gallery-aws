@@ -33,3 +33,7 @@ dist-artifacts/
 *.zip
 *.tar.gz
 dist-artifacts/
+
+# database dumps (contain user data)
+gallery.sql
+*.dump
