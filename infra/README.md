@@ -17,6 +17,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
 - Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer.
 - **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
+- **Images uploaded from a computer go to S3 automatically** (`artworks/uploads/` in the persistent data bucket) and are served by the API. What lives in the buckets, the commands and the cost: [S3.md](S3.md).
 - Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch, k6 load test.
 
 > **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
@@ -34,6 +35,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Bootstrap (persistent buckets)](#bootstrap-persistent-buckets)
 - [How an instance boots](#how-an-instance-boots)
 - [Database: seed, queries and backup (RDS.md)](#database-seed-queries-and-backup)
+- [S3: buckets and uploaded images (S3.md)](S3.md)
 - [Prerequisites](#prerequisites)
 - [Usage](#usage)
 - [Build time](#build-time)
@@ -59,6 +61,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
 | Entry point | One public URL: the ALB (`terraform output app_url`) |
 | Persistent between sessions | 2 S3 buckets (Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh` |
+| Uploaded images | Stored by the backend in `s3://<data bucket>/artworks/uploads/` and served at `/api/uploads/<file>` (see [S3.md](S3.md)) |
 | Database content after a rebuild | Restored by the first booting instance from `seed/gallery.sql` (no manual step). See [RDS.md](RDS.md) |
 | Destroyed every session | Everything else (`./destroy.sh`, ends with `OK: nothing billable left.`) |
 
@@ -202,6 +205,7 @@ infra/
 |-- destroy.sh                  destroy + leftover check (EC2, NAT, EIP, ALB, RDS)
 |-- .gitignore                  state, tfvars, keys, credentials, SQL dumps
 |-- RDS.md                      seed, query the database, save and restore data
+|-- S3.md                       buckets, image uploads, commands, cost
 |-- .terraform.lock.hcl         provider versions (committed)
 |-- images/                     architecture diagrams + screenshots
 |-- bootstrap/                  bootstrap.sh: 2 persistent S3 buckets (AWS CLI)
@@ -243,8 +247,9 @@ The main stack still uses a **local** state file. Migrating it to the state buck
 2. Reads the 3 secrets from SSM Parameter Store (retries 5 times). **No secret is in `user_data` or in Git.** The script never uses `set -x`, so secrets are not printed in logs.
 3. Downloads `artifacts/backend-<version>.tar.gz` and `artifacts/frontend-<version>.tar.gz` from the data bucket (through the free S3 endpoint), runs `npm ci --omit=dev`.
 4. **Seeds the database (step 3b).** Installs the PostgreSQL client, downloads `s3://<data bucket>/seed/gallery.sql` and, **only if the `users` table does not exist yet**, loads it in a single transaction **before the backend starts** (otherwise the backend would create empty tables first). If two instances boot together, the loser fails on `already exists` and rolls back, so nothing is applied twice. No dump in S3, or any failure here, never stops the boot (the database is then simply empty).
-5. Starts the API with **systemd** (`Restart=always`) on `127.0.0.1:3001`, and serves the frontend with nginx on port 80, proxying `/api` to the API.
-6. **Fallback:** if the artifacts are missing or `npm ci` fails, a tiny server answers `/api/health` with `{"status":"fallback"}`, so the ALB sees healthy targets and the page says what is missing.
+5. Writes the backend environment, including `S3_BUCKET` and `AWS_REGION`: with them, uploaded images go to S3 instead of the instance disk ([S3.md](S3.md#2-how-an-uploaded-image-reaches-s3)).
+6. Starts the API with **systemd** (`Restart=always`) on `127.0.0.1:3001`, and serves the frontend with nginx on port 80, proxying `/api` to the API.
+7. **Fallback:** if the artifacts are missing or `npm ci` fails, a tiny server answers `/api/health` with `{"status":"fallback"}`, so the ALB sees healthy targets and the page says what is missing.
 
 Logs on an instance: `/var/log/art-gallery-boot.log`, `/var/log/cloud-init-output.log`, `journalctl -u art-gallery`. The seed step writes one of these lines in the boot log:
 
@@ -891,6 +896,7 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 - [x] Architecture diagram version 2 (`images/architecture-v2.1.drawio`)
 - [x] First full-stack timing (11.5 min, fallback mode)
 - [x] Database seed restored automatically at first boot (`seed/gallery.sql`, boot script step 3b)
+- [x] Uploaded images stored in S3 (`artworks/uploads/`), served by the API
 - [x] Real-mode deployment verified: site, API and restored data behind the ALB
 - [ ] One-command rebuild script (`rebuild.sh`: bootstrap, apply, health check)
 - [ ] Resilience demo evidence (T7)
@@ -908,7 +914,7 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 |---|---|---|
 | Single NAT | One NAT in AZ a: if AZ a fails, AZ b loses outbound traffic (npm, dnf). Inbound user traffic through the ALB is not affected | Accepted cost trade-off. Test and mention in the defence |
 | DB data between sessions | Lost at `destroy` (no final snapshot), but **restored from `seed/gallery.sql`** at the next apply. Data created on AWS after the restore is lost | Save it as the new seed before destroying ([RDS.md](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy)), or snapshot + `db_snapshot_identifier` (T9) |
-| Uploaded artwork images | The backend writes uploads on the instance disk (`uploads/`), lost when an instance is replaced | Move uploads to the data bucket (`artworks/`) |
+| Uploaded artwork images | Stored in S3 and kept after a destroy, but an image shows only if an artwork row points to it (rows come back as of the seed) | Save the live database as the new seed before destroying ([RDS.md](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy)) |
 | TLS to PostgreSQL | `db_force_ssl = false` (RDS PostgreSQL 15+ forces TLS by default) | Traffic stays in the private VPC. Set `true` once the API connects with TLS (`DB_SSL`, see the [backend](../backend/README.md#configuration)) |
 | Secrets in state | Generated values are also in the Terraform state | Keep the state in the private, encrypted, versioned bucket |
 | HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
@@ -947,6 +953,8 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 | `aws: command not found` running `bootstrap.sh` | Wrong `bash` (WSL has no AWS CLI). Use Git Bash |
 | `Permission denied (publickey)` and no `labsuser.pem` | Skip SSH: EC2 console, select the instance, Connect, **Session Manager** |
 | `502 Bad Gateway` right after replacing instances | The new instances are still booting (3 to 5 minutes). Check target health, see T7 |
+| `AccessDenied` when opening an S3 object URL in the browser | Expected: the bucket is private. Open `http://<app_url>/api/uploads/<file>` instead ([S3.md](S3.md#6-common-problems)) |
+| Uploaded images land on the instance disk, not in S3 | The site runs the old backend: rebuild and upload `backend-<version>.tar.gz` with `@aws-sdk/client-s3` installed, then apply |
 | Old ECR repositories show up | Leftovers from earlier tests: `aws ecr delete-repository --repository-name <name> --force` |
 
 ## Appendix: L3 baseline (29 resources)
