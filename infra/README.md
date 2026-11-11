@@ -15,10 +15,10 @@ TODO before submission (delete this block when done):
 Infrastructure as Code for the **Online Art Gallery** project ([project overview](../README.md)), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
 
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
-- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer.
+- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer. The current configuration adds two CloudWatch alarms, pending the next apply.
 - **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
 - **Images uploaded from a computer go to S3 automatically** (`artworks/uploads/` in the persistent data bucket) and are served by the API. What lives in the buckets, the commands and the cost: [S3.md](S3.md).
-- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch, k6 load test.
+- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch log shipping, k6 load test.
 
 > **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
 
@@ -30,7 +30,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Architecture](#architecture)
 - [How do we deploy the application? Options compared](#how-do-we-deploy-the-application-options-compared)
 - [Other decisions](#other-decisions)
-- [What is deployed (41 resources)](#what-is-deployed-41-resources)
+- [What is deployed (41-resource baseline)](#what-is-deployed-41-resource-baseline)
 - [Project structure](#project-structure)
 - [Bootstrap (persistent buckets)](#bootstrap-persistent-buckets)
 - [How an instance boots](#how-an-instance-boots)
@@ -55,7 +55,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Item | Value |
 |---|---|
 | Region / account type | `us-east-1`, AWS Academy Learner Lab (`LabRole`, `LabInstanceProfile`) |
-| Resources in the main stack | **41 managed** (`terraform state list` shows 45 lines: the 41 resources + 4 read-only data sources) |
+| Resources in the main stack | **41 applied baseline; 43 in current config** (two alarms pending; 47 state-list entries after apply including 4 read-only data sources) |
 | Full build time (measured) | **about 11.5 minutes**: RDS 9 min 14 s is the critical path |
 | Running cost | **about 0.15 USD per hour** (approximate, see [Cost](#cost)) |
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
@@ -178,9 +178,9 @@ How the site and API are built is described in the [frontend](../frontend/README
 | Instance metadata | IMDSv2 required, hop limit 2 | IMDSv1 | Security hardening. Hop limit 2 lets the AWS SDK work if a container is ever used |
 | Deregistration delay | 30 s | 300 s default | Faster demos and faster destroy |
 
-## What is deployed (41 resources)
+## What is deployed (41-resource baseline)
 
-Full list: `terraform state list`. By area:
+The applied v2 baseline has 41 resources. The current configuration adds two metric alarms, which will exist in AWS after the next apply. Full list: `terraform state list`.
 
 | Area | Resources | Module |
 |---|---|---|
@@ -191,6 +191,7 @@ Full list: `terraform state list`. By area:
 | Load balancer | ALB, target group (`/api/health`, 15 s), HTTP :80 listener | `alb` |
 | Database | RDS PostgreSQL instance + parameter group | `rds` |
 | Application | Launch Template, Auto Scaling Group (min 2, max 3, one instance per AZ) | `asg` |
+| Monitoring (pending apply) | ALB unhealthy target alarm, RDS high CPU alarm | `monitoring` |
 | Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023) | root / `asg` |
 
 ## Project structure
@@ -216,6 +217,7 @@ infra/
     |-- secrets/                DB password, JWT secret, admin password (SSM)
     |-- alb/                    load balancer, target group, listener
     |-- rds/                    PostgreSQL in the private DB subnets
+    |-- monitoring/             CloudWatch alarms for ALB target health and RDS CPU
     `-- asg/                    launch template (+ boot script) and Auto Scaling Group
 ```
 
@@ -237,7 +239,7 @@ cd bootstrap
 
 Why a persistent stack: the state must survive `destroy` (cahier rule 7), and re-uploading the artifacts after every session would waste time. Buckets are billed by storage (cents), not by the hour, so keeping them is consistent with the destroy rule. Bucket names are global: if the script says `BucketAlreadyExists`, change the suffix, and use the **same** suffix as `unique_suffix` in `terraform.tfvars`. At the end of the semester, delete the buckets so nothing keeps costing.
 
-The main stack still uses a **local** state file. Migrating it to the state bucket is a planned step.
+The main stack stores Terraform state in the versioned S3 state bucket with S3-native locking. `./apply.sh` saves an additional timestamped local copy after a successful apply.
 
 ## How an instance boots
 
@@ -360,7 +362,7 @@ The file contains the users' emails and password hashes: keep it in the private 
 cd infra
 terraform init -backend-config=backend.hcl
 terraform validate
-terraform plan                       # expected: Plan: 41 to add
+terraform plan                       # expected: Plan: 43 to add (empty remote state)
 time ./apply.sh -auto-approve        # about 11 minutes; saves a local state backup on success
 ```
 
@@ -925,8 +927,9 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 - [ ] Resilience demo evidence (T7)
 - [ ] Rolling update demo (T8)
 - [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
-- [ ] Migrate the main stack state to the S3 state bucket
-- [ ] CloudWatch logs, metrics and alarms
+- [x] S3 remote state with bucket versioning, native locking and local backups
+- [x] CloudWatch metric alarms configured (ALB unhealthy targets and RDS CPU; apply pending)
+- [ ] CloudWatch log shipping
 - [ ] k6 load test and real-mode rebuild timing
 - [ ] boto3 scripts (RDS snapshot and restore, resilience test, cost report)
 - [ ] Optional: ECR registry in `bootstrap/` as an upgrade of the deployment method
