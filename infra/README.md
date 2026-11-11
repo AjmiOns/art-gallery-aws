@@ -361,8 +361,7 @@ cd infra
 terraform init -backend-config=backend.hcl
 terraform validate
 terraform plan                       # expected: Plan: 41 to add
-time terraform apply -auto-approve   # about 11 minutes, RDS is the slowest
-./backup-state.sh                    # save a local copy of the remote state
+time ./apply.sh -auto-approve        # about 11 minutes; saves a local state backup on success
 ```
 
 During the apply, the first app instance restores the seed into RDS (see [How an instance boots](#how-an-instance-boots)). Nothing to run by hand: when `apply` returns, the site already shows the data.
