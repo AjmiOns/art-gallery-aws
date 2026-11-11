@@ -1,0 +1,50 @@
+# --- Terraform (never commit state, variables or caches) ---
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Keep these (they are NOT secret)
+!.terraform.lock.hcl
+!*.tfvars.example
+
+# --- Secrets / credentials ---
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+.aws/
+credentials
+
+# --- App build output (when this file is used at the repo root) ---
+node_modules/
+.next/
+out/
+dist/
+coverage/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+.~lock.*#
+
+# --- Local tools ---
+*.zip

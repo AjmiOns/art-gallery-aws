@@ -30,4 +30,15 @@ for pair in "EC2:$EC2" "NAT:$NAT" "EIP:$EIP" "ALB:$ALB" "RDS:$RDS"; do
 done
 
 [ "$LEFT" -eq 0 ] && echo "OK: nothing billable left." || echo "Delete the resources above manually!"
+
+# Persistent resources (created by bootstrap/, intentionally NOT destroyed here).
+# Informational only: they do not change the exit code.
+echo ">>> Persistent buckets left on purpose (bootstrap/)"
+BUCKETS=$(aws s3api list-buckets --query "Buckets[?starts_with(Name, 'art-gallery-')].Name" --output text 2>/dev/null)
+if [ -n "$BUCKETS" ] && [ "$BUCKETS" != "None" ]; then
+  for b in $BUCKETS; do echo "   - $b"; done
+else
+  echo "   (none)"
+fi
+
 exit "$LEFT"

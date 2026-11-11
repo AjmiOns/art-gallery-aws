@@ -1,12 +1,18 @@
+# Dépendances et builds
 node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
+next-env.d.ts
+dist-artifacts
+# Secrets et fichiers d'environnement
 .env
 .env.*
 !.env.example
-*.log
-.DS_Store
+!.env.local.example
+*.pem
+*.zip
 # Terraform
 .terraform/
 *.tfstate
@@ -14,20 +20,20 @@ out/
 *.tfvars
 crash.log
 
-# Next.js / TypeScript
-next-env.d.ts
-*.tsbuildinfo
-!.env.local.example
-
-# Images envoy�es par les artistes
+# Logs, uploads, fichiers système
+*.log
 backend/uploads/*
+.DS_Store
+desktop.ini
+Thumbs.db
+infra.zip
+*.zip
+*.tar.gz
+dist-artifacts/
+*.zip
+*.tar.gz
+dist-artifacts/
 
-
-*.pem
-*.tfstate
-*.tfstate.*
-.terraform/
-terraform.tfvars*.pem
-terraform.tfvars
-*.tfstate*
-.terraform/
+# database dumps (contain user data)
+gallery.sql
+*.dump
