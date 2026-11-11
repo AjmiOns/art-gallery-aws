@@ -25,6 +25,11 @@ output "rds_endpoint" {
   value = "${module.rds.address}:${module.rds.port}"
 }
 
+output "cloudwatch_dashboard_name" {
+  description = "Name of the CloudWatch operations dashboard"
+  value       = module.monitoring.dashboard_name
+}
+
 output "list_app_instances" {
   description = "Private IPs of the running app instances (then: ssh -J ec2-user@<bastion> ec2-user@<ip>)"
   value       = "aws ec2 describe-instances --region ${var.region} --filters Name=tag:Name,Values=${var.project}-app Name=instance-state-name,Values=running --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress,Placement.AvailabilityZone]' --output table"
