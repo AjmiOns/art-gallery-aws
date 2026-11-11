@@ -16,6 +16,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
 - Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer.
+- **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
 - Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch, k6 load test.
 
 > **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
@@ -32,6 +33,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Project structure](#project-structure)
 - [Bootstrap (persistent buckets)](#bootstrap-persistent-buckets)
 - [How an instance boots](#how-an-instance-boots)
+- [Database: seed, queries and backup (RDS.md)](#database-seed-queries-and-backup)
 - [Prerequisites](#prerequisites)
 - [Usage](#usage)
 - [Build time](#build-time)
@@ -56,7 +58,8 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Running cost | **about 0.15 USD per hour** (approximate, see [Cost](#cost)) |
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
 | Entry point | One public URL: the ALB (`terraform output app_url`) |
-| Persistent between sessions | 2 S3 buckets (Terraform state, artifacts/images), created by `bootstrap/bootstrap.sh` |
+| Persistent between sessions | 2 S3 buckets (Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh` |
+| Database content after a rebuild | Restored by the first booting instance from `seed/gallery.sql` (no manual step). See [RDS.md](RDS.md) |
 | Destroyed every session | Everything else (`./destroy.sh`, ends with `OK: nothing billable left.`) |
 
 ## Architecture
@@ -197,7 +200,8 @@ infra/
 |-- outputs.tf                  app URL, health URL, bastion IP, RDS endpoint, helper commands
 |-- terraform.tfvars.example    template for your personal values
 |-- destroy.sh                  destroy + leftover check (EC2, NAT, EIP, ALB, RDS)
-|-- .gitignore                  state, tfvars, keys, credentials
+|-- .gitignore                  state, tfvars, keys, credentials, SQL dumps
+|-- RDS.md                      seed, query the database, save and restore data
 |-- .terraform.lock.hcl         provider versions (committed)
 |-- images/                     architecture diagrams + screenshots
 |-- bootstrap/                  bootstrap.sh: 2 persistent S3 buckets (AWS CLI)
@@ -215,12 +219,12 @@ Each module has `variables.tf` (inputs), `main.tf` (resources), `outputs.tf` (ou
 
 ## Bootstrap (persistent buckets)
 
-`bootstrap/bootstrap.sh` creates two S3 buckets that are **not** removed by `./destroy.sh`:
+`bootstrap/bootstrap.sh` creates two S3 buckets that are **not** removed by `./destroy.sh`. It is a bash script: on Windows run it in **Git Bash** (not PowerShell or WSL without the AWS CLI), and make sure the file has Unix (LF) line endings, otherwise bash stops with `invalid option name: pipefail`. The repository's `.gitattributes` (`*.sh text eol=lf`) prevents this:
 
 | Bucket | Purpose | Protection |
 |---|---|---|
 | `art-gallery-tfstate-<suffix>` | Terraform state of the main stack | public access blocked, AES256 encryption, **versioning on** |
-| `art-gallery-data-<suffix>` | Application artifacts (`artifacts/`) and artwork images (`artworks/`) | public access blocked, AES256 encryption |
+| `art-gallery-data-<suffix>` | Application artifacts (`artifacts/`), artwork images (`artworks/`) and the database seed (`seed/gallery.sql`) | public access blocked, AES256 encryption |
 
 ```bash
 cd bootstrap
@@ -238,16 +242,37 @@ The main stack still uses a **local** state file. Migrating it to the state buck
 1. Installs nginx and Node.js 20 (`dnf`, through the NAT Gateway).
 2. Reads the 3 secrets from SSM Parameter Store (retries 5 times). **No secret is in `user_data` or in Git.** The script never uses `set -x`, so secrets are not printed in logs.
 3. Downloads `artifacts/backend-<version>.tar.gz` and `artifacts/frontend-<version>.tar.gz` from the data bucket (through the free S3 endpoint), runs `npm ci --omit=dev`.
-4. Starts the API with **systemd** (`Restart=always`) on `127.0.0.1:3001`, and serves the frontend with nginx on port 80, proxying `/api` to the API.
-5. **Fallback:** if the artifacts are missing or `npm ci` fails, a tiny server answers `/api/health` with `{"status":"fallback"}`, so the ALB sees healthy targets and the page says what is missing.
+4. **Seeds the database (step 3b).** Installs the PostgreSQL client, downloads `s3://<data bucket>/seed/gallery.sql` and, **only if the `users` table does not exist yet**, loads it in a single transaction **before the backend starts** (otherwise the backend would create empty tables first). If two instances boot together, the loser fails on `already exists` and rolls back, so nothing is applied twice. No dump in S3, or any failure here, never stops the boot (the database is then simply empty).
+5. Starts the API with **systemd** (`Restart=always`) on `127.0.0.1:3001`, and serves the frontend with nginx on port 80, proxying `/api` to the API.
+6. **Fallback:** if the artifacts are missing or `npm ci` fails, a tiny server answers `/api/health` with `{"status":"fallback"}`, so the ALB sees healthy targets and the page says what is missing.
 
-Logs on an instance: `/var/log/art-gallery-boot.log`, `/var/log/cloud-init-output.log`, `journalctl -u art-gallery`.
+Logs on an instance: `/var/log/art-gallery-boot.log`, `/var/log/cloud-init-output.log`, `journalctl -u art-gallery`. The seed step writes one of these lines in the boot log:
+
+```bash
+sudo grep -E "seed:|=== mode" /var/log/art-gallery-boot.log
+# seed: database restored from the dump          (fresh database, data loaded)
+# seed: users table already present ... skipping (second instance, or a restored snapshot)
+# seed: no dump in s3://.../seed/, skipping      (nothing uploaded in step 4b)
+```
+
+## Database: seed, queries and backup
+
+The full guide is **[RDS.md](RDS.md)**. In short:
+
+| I want to... | Where |
+|---|---|
+| Make `terraform apply` bring the application back **with its data** | Usage step 4b below (upload `seed/gallery.sql` once), then [RDS.md, seed](RDS.md#1-the-seed-data-that-comes-back-at-every-apply) |
+| Look at the tables and run `select` on `users`, `payments`... | [RDS.md, queries](RDS.md#2-look-inside-the-database-tables-and-select) |
+| Keep the data created on AWS before a destroy | [RDS.md, save](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy) |
+| Fix an error (UTF-16 dump, `already exists`, 502...) | [RDS.md, problems](RDS.md#4-common-problems) |
 
 ## Prerequisites
 
 - Terraform >= 1.5 (`sudo snap install terraform --classic`)
 - AWS CLI v2 (`sudo snap install aws-cli --classic`)
 - Node.js 20+ and npm (to build the artifacts)
+- Docker Desktop with the local `art-gallery-db` container (to make the database seed)
+- On Windows: **Git Bash** to run `.sh` scripts, and a `.gitattributes` with `*.sh text eol=lf` and `*.tpl text eol=lf` so Git never converts them to CRLF
 - An active AWS Academy Learner Lab session
 - The Learner Lab key `labsuser.pem` (`chmod 400 labsuser.pem`)
 
@@ -307,6 +332,21 @@ The version in the file names must match the Terraform variable `app_version` (d
 
 *Screenshot: [artifact sizes and upload](EVIDENCE.md#4-upload-the-artifacts-only-when-the-code-changes)*
 
+### 4b. Upload the database seed (once, and again only when you want newer data)
+
+The boot script restores `seed/gallery.sql` into the empty RDS of every new stack. Create it from the local Docker database (Docker Desktop running, PowerShell, from `infra/`):
+
+```powershell
+docker exec art-gallery-db pg_dump -U gallery --no-owner --no-acl -f /tmp/gallery.sql art_gallery
+docker cp art-gallery-db:/tmp/gallery.sql ..\gallery.sql
+aws s3 cp ..\gallery.sql s3://art-gallery-data-<suffix>/seed/gallery.sql
+aws s3 ls s3://art-gallery-data-<suffix>/seed/ --human-readable
+```
+
+> **Do not** write the dump with `pg_dump ... > gallery.sql` in Windows PowerShell: it saves the file as UTF-16 and the restore fails with `invalid byte sequence for encoding "UTF8": 0xff`. The `-f` + `docker cp` way above keeps plain UTF-8.
+
+The file contains the users' emails and password hashes: keep it in the private bucket, never commit it (`gallery.sql` is in `.gitignore`).
+
 ### 5. Deploy
 
 ```bash
@@ -316,6 +356,8 @@ terraform validate
 terraform plan                       # expected: Plan: 41 to add
 time terraform apply -auto-approve   # about 11 minutes, RDS is the slowest
 ```
+
+During the apply, the first app instance restores the seed into RDS (see [How an instance boots](#how-an-instance-boots)). Nothing to run by hand: when `apply` returns, the site already shows the data.
 
 *Screenshot: [terraform plan summary](EVIDENCE.md#5-deploy)*
 
@@ -336,6 +378,8 @@ time ./destroy.sh
 ```
 
 The script runs `terraform destroy`, then checks EC2, NAT Gateways, Elastic IPs, load balancers and RDS. It must finish with `OK: nothing billable left.` RDS takes several minutes to delete, so do not close the terminal early.
+
+RDS and its data are deleted with the stack. The next `terraform apply` restores `seed/gallery.sql`. Anything created on the live site since then (new orders, accounts) is lost, unless you first save it as the new seed: [RDS.md, section 3](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy).
 
 *Screenshot: [destroy and leftover check](EVIDENCE.md#6-destroy-mandatory-at-the-end-of-every-session)*
 
@@ -846,6 +890,8 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 - [x] Application artifacts deployed from S3 (real mode: API and site answer)
 - [x] Architecture diagram version 2 (`images/architecture-v2.1.drawio`)
 - [x] First full-stack timing (11.5 min, fallback mode)
+- [x] Database seed restored automatically at first boot (`seed/gallery.sql`, boot script step 3b)
+- [x] Real-mode deployment verified: site, API and restored data behind the ALB
 - [ ] One-command rebuild script (`rebuild.sh`: bootstrap, apply, health check)
 - [ ] Resilience demo evidence (T7)
 - [ ] Rolling update demo (T8)
@@ -861,7 +907,8 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 | Topic | Today | Why / what to do |
 |---|---|---|
 | Single NAT | One NAT in AZ a: if AZ a fails, AZ b loses outbound traffic (npm, dnf). Inbound user traffic through the ALB is not affected | Accepted cost trade-off. Test and mention in the defence |
-| DB data between sessions | Lost at `destroy` (no final snapshot) | Manual snapshot + `db_snapshot_identifier` (T9) |
+| DB data between sessions | Lost at `destroy` (no final snapshot), but **restored from `seed/gallery.sql`** at the next apply. Data created on AWS after the restore is lost | Save it as the new seed before destroying ([RDS.md](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy)), or snapshot + `db_snapshot_identifier` (T9) |
+| Uploaded artwork images | The backend writes uploads on the instance disk (`uploads/`), lost when an instance is replaced | Move uploads to the data bucket (`artworks/`) |
 | TLS to PostgreSQL | `db_force_ssl = false` (RDS PostgreSQL 15+ forces TLS by default) | Traffic stays in the private VPC. Set `true` once the API connects with TLS (`DB_SSL`, see the [backend](../backend/README.md#configuration)) |
 | Secrets in state | Generated values are also in the Terraform state | Keep the state in the private, encrypted, versioned bucket |
 | HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
@@ -873,6 +920,7 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 - Never commit `terraform.tfvars`, `*.tfstate`, `.terraform/`, `labsuser.pem` or AWS credentials (covered by `.gitignore`). Commit `.terraform.lock.hcl`.
 - Keep `terraform.tfstate` until you have run `destroy`: without it Terraform cannot find your resources.
 - The database password, JWT secret and admin password are generated by Terraform, stored in SSM Parameter Store and never in Git or in `user_data`. Read the admin password with `terraform output read_admin_password`.
+- `seed/gallery.sql` contains users' emails and password hashes. It stays in the private, encrypted data bucket. Never commit it, and delete any temporary copy (`tmp/` prefix, `/tmp` on an instance) after use.
 - If your public IP changes, update `admin_cidr` and run `terraform apply` again.
 - Blur the admin IP, the account ID, public IPs and any secret in every screenshot before committing.
 
@@ -892,6 +940,13 @@ k6 against `app_url`: 50 concurrent users, 100 at peak, report p95 latency and e
 | `/api/artworks` returns 500 | Backend cannot reach the DB: check `db_force_ssl`, test `nc -vz <rds endpoint> 5432` from an instance, `journalctl -u art-gallery` |
 | SSM `AccessDenied` in the boot log | LabRole cannot read Parameter Store in your lab: the secret mechanism must change |
 | `apply` times out waiting for capacity | Instances never became healthy: read the boot log of one before destroying |
+| Site loads but shows no artworks / tables empty | The seed was not loaded: check `aws s3 ls s3://<data bucket>/seed/`, then `sudo grep seed: /var/log/art-gallery-boot.log` on an instance. Upload the dump (step 4b) and rebuild, or restore by hand: [RDS.md](RDS.md#4-common-problems) |
+| `invalid byte sequence for encoding "UTF8": 0xff` when restoring | The dump was written by PowerShell `>` (UTF-16). Make it again with the `-f` + `docker cp` commands of step 4b |
+| `relation "..." already exists` when restoring by hand | The backend already created empty tables. Drop them first, see [RDS.md](RDS.md#4-common-problems) |
+| `invalid option name: pipefail` running a `.sh` file | Windows line endings (CRLF). Convert to LF and add the `.gitattributes` lines (see Prerequisites) |
+| `aws: command not found` running `bootstrap.sh` | Wrong `bash` (WSL has no AWS CLI). Use Git Bash |
+| `Permission denied (publickey)` and no `labsuser.pem` | Skip SSH: EC2 console, select the instance, Connect, **Session Manager** |
+| `502 Bad Gateway` right after replacing instances | The new instances are still booting (3 to 5 minutes). Check target health, see T7 |
 | Old ECR repositories show up | Leftovers from earlier tests: `aws ecr delete-repository --repository-name <name> --force` |
 
 ## Appendix: L3 baseline (29 resources)
