@@ -304,11 +304,17 @@ Check: `aws sts get-caller-identity`. Credentials expire when the lab session en
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-curl -4 ifconfig.me          # your public IPv4
-nano terraform.tfvars        # admin_cidr = "YOUR.IP/32", unique_suffix = "<same as bootstrap>"
+nano terraform.tfvars        # set unique_suffix to the same value used by bootstrap
 ```
 
-Each variable name must appear **once** in the file (a duplicated line keeps the last value and is easy to miss).
+`./apply.sh` detects your current public IPv4 and passes it as `admin_cidr` for bastion SSH access. For a plan that matches the apply, run:
+
+```bash
+ADMIN_IP=$(curl -4fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+terraform plan -var="admin_cidr=${ADMIN_IP}/32"
+```
+
+Each variable name must appear **once** in `terraform.tfvars` (a duplicate keeps the last value and is easy to miss).
 
 *Screenshot: [admin IP and tfvars](EVIDENCE.md#2-configure)*
 
@@ -362,8 +368,9 @@ The file contains the users' emails and password hashes: keep it in the private 
 cd infra
 terraform init -backend-config=backend.hcl
 terraform validate
-terraform plan                       # after today's deployment: 2 to add, 2 to change for SNS alerts
-time ./apply.sh -auto-approve        # about 11 minutes; saves a local state backup on success
+ADMIN_IP=$(curl -4fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+terraform plan -var="admin_cidr=${ADMIN_IP}/32"  # review the current plan with your public IP
+time ./apply.sh                                  # prompts for approval; saves a local state backup
 ```
 
 During the apply, the first app instance restores the seed into RDS (see [How an instance boots](#how-an-instance-boots)). Nothing to run by hand: when `apply` returns, the site already shows the data.
