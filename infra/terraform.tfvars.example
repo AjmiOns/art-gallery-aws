@@ -1,2 +1,3 @@
 admin_cidr    = "YOUR.PUBLIC.IP/32"
 unique_suffix = "CHANGE-ME-same-as-bootstrap"
+alarm_email   = "you@example.com"

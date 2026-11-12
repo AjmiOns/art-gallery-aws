@@ -55,7 +55,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Item | Value |
 |---|---|
 | Region / account type | `us-east-1`, AWS Academy Learner Lab (`LabRole`, `LabInstanceProfile`) |
-| Resources in the main stack | **41 applied baseline; 44 in current config** (two alarms and one dashboard pending; 48 state-list entries after apply including 4 read-only data sources) |
+| Resources in the main stack | **44 currently applied; 46 after email alerts** (SNS topic and subscription pending; 50 state-list entries after apply including 4 read-only data sources) |
 | Full build time (measured) | **about 11.5 minutes**: RDS 9 min 14 s is the critical path |
 | Running cost | **about 0.15 USD per hour** (approximate, see [Cost](#cost)) |
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
@@ -191,7 +191,7 @@ The applied v2 baseline has 41 resources. The current configuration adds two met
 | Load balancer | ALB, target group (`/api/health`, 15 s), HTTP :80 listener | `alb` |
 | Database | RDS PostgreSQL instance + parameter group | `rds` |
 | Application | Launch Template, Auto Scaling Group (min 2, max 3, one instance per AZ) | `asg` |
-| Monitoring (pending apply) | Operations dashboard, ALB target health and request/error metrics, RDS CPU/connections/storage, two alarms | `monitoring` |
+| Monitoring | Operations dashboard, ALB and RDS metrics, two alarms; SNS email notifications pending | `monitoring` |
 | Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023) | root / `asg` |
 
 ## Project structure
@@ -362,7 +362,7 @@ The file contains the users' emails and password hashes: keep it in the private 
 cd infra
 terraform init -backend-config=backend.hcl
 terraform validate
-terraform plan                       # expected: Plan: 44 to add (empty remote state)
+terraform plan                       # after today's deployment: 2 to add, 2 to change for SNS alerts
 time ./apply.sh -auto-approve        # about 11 minutes; saves a local state backup on success
 ```
 
@@ -928,7 +928,8 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 - [ ] Rolling update demo (T8)
 - [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
 - [x] S3 remote state with bucket versioning, native locking and local backups
-- [x] CloudWatch dashboard and metric alarms configured (apply pending)
+- [x] CloudWatch dashboard and metric alarms deployed
+- [ ] SNS email notifications configured (apply pending; confirm the SNS subscription email)
 - [ ] CloudWatch log shipping
 - [ ] k6 load test and real-mode rebuild timing
 - [ ] boto3 scripts (RDS snapshot and restore, resilience test, cost report)

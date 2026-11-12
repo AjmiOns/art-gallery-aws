@@ -6,6 +6,10 @@ variable "region" {
   type = string
 }
 
+variable "alarm_email" {
+  type = string
+}
+
 variable "alb_arn_suffix" {
   type = string
 }

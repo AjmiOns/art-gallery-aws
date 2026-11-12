@@ -1,3 +1,14 @@
+resource "aws_sns_topic" "alarm_notifications" {
+  name = "${var.name}-alarm-notifications"
+  tags = var.tags
+}
+
+resource "aws_sns_topic_subscription" "alarm_email" {
+  topic_arn = aws_sns_topic.alarm_notifications.arn
+  protocol  = "email"
+  endpoint  = var.alarm_email
+}
+
 resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
   alarm_name          = "${var.name}-alb-unhealthy-hosts"
   alarm_description   = "ALB target group has unhealthy targets for two consecutive minutes."
@@ -10,6 +21,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
   statistic           = "Maximum"
   threshold           = 0
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarm_notifications.arn]
+  ok_actions          = [aws_sns_topic.alarm_notifications.arn]
 
   dimensions = {
     LoadBalancer = var.alb_arn_suffix
@@ -31,6 +44,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
   statistic           = "Average"
   threshold           = 80
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarm_notifications.arn]
+  ok_actions          = [aws_sns_topic.alarm_notifications.arn]
 
   dimensions = {
     DBInstanceIdentifier = var.db_instance_identifier
