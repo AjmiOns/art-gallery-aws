@@ -2,6 +2,11 @@
 # Boot script of every app instance (Launch Template user_data).
 # No secret in this file: passwords are read from SSM Parameter Store at boot.
 # Do NOT add "set -x": it would print the secrets in the logs.
+# Terraform log groups (agent configuration is added in a follow-up change):
+# boot=${log_group_boot}
+# nginx access=${log_group_nginx_access}
+# nginx error=${log_group_nginx_error}
+# app=${log_group_app}
 set -u
 exec > >(tee -a /var/log/art-gallery-boot.log) 2>&1
 

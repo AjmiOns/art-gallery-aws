@@ -25,19 +25,23 @@ resource "aws_launch_template" "app" {
   vpc_security_group_ids = [var.app_sg_id]
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    region             = var.region
-    bucket             = var.artifact_bucket
-    app_version        = var.app_version
-    backend_entry      = var.backend_entry
-    node_env           = var.node_env
-    public_host        = var.public_host
-    db_host            = var.db_host
-    db_port            = var.db_port
-    db_name            = var.db_name
-    db_user            = var.db_user
-    ssm_db_password    = var.ssm_db_password
-    ssm_jwt_secret     = var.ssm_jwt_secret
-    ssm_admin_password = var.ssm_admin_password
+    region                 = var.region
+    bucket                 = var.artifact_bucket
+    app_version            = var.app_version
+    backend_entry          = var.backend_entry
+    node_env               = var.node_env
+    public_host            = var.public_host
+    db_host                = var.db_host
+    db_port                = var.db_port
+    db_name                = var.db_name
+    db_user                = var.db_user
+    ssm_db_password        = var.ssm_db_password
+    ssm_jwt_secret         = var.ssm_jwt_secret
+    ssm_admin_password     = var.ssm_admin_password
+    log_group_boot         = var.log_group_boot
+    log_group_nginx_access = var.log_group_nginx_access
+    log_group_nginx_error  = var.log_group_nginx_error
+    log_group_app          = var.log_group_app
   }))
 
   # IMDSv2 only.
