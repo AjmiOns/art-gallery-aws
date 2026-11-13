@@ -200,9 +200,11 @@ The applied v2 baseline has 41 resources. The current configuration adds two met
 - Capacity remains minimum 2, desired 2, maximum 3 instances.
 - Test during the planned T11 k6 load test, then inspect ASG scaling activities and the `asg_cpu_scaling_policy_name` output.
 
-CloudWatch groups cover boot, nginx access/error, and `art-gallery.service` journal logs under `/art-gallery/`.
-Terraform applies seven-day retention and owns the groups so `terraform destroy` removes them.
-Log forwarding is deferred; the groups and dashboard query remain empty until an agent is configured.
+- `/var/log/art-gallery-boot.log` ships to `/art-gallery/boot`.
+- `/var/log/nginx/access.log` and `/var/log/nginx/error.log` ship to `/art-gallery/nginx-access` and `/art-gallery/nginx-error`; `/var/log/art-gallery-app.log` ships to `/art-gallery/app`.
+- The CloudWatch agent setup is non-fatal; Terraform owns all four groups and their seven-day retention so `terraform destroy` removes them.
+- The first end-to-end log shipping test happens at the next apply, when new instances boot.
+- Check boot streams with `aws logs describe-log-streams --log-group-name /art-gallery/boot --region us-east-1`.
 
 ## Project structure
 
@@ -967,6 +969,7 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 | Secrets in state | Generated values are also in the Terraform state | Keep the state in the private, encrypted, versioned bucket |
 | HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
 | ASG CPU target tracking | Scale-in is intentionally slow by design; AWS creates the policy's CloudWatch alarms and deletes them automatically with the policy | Expected behavior; observe it during the T11 load test |
+| CloudWatch Logs delivery | If `LabInstanceProfile` cannot write to CloudWatch Logs, the groups stay empty | Agent setup is non-fatal; the app still runs |
 | Remote state | Main stack uses a local state file | Migrate it to the S3 state bucket |
 | `npm ci` at boot | Depends on the npm registry through the NAT | Bundle `node_modules` in the artifact if it becomes a problem |
 
