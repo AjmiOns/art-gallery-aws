@@ -27,6 +27,7 @@ provider "aws" {
     tags = {
       Project = var.project
       Managed = "terraform"
+      Group   = var.group
     }
   }
 }

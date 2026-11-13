@@ -68,6 +68,11 @@ resource "aws_launch_template" "app" {
     tags          = merge(var.tags, { Name = "${var.name}-app" })
   }
 
+  tag_specifications {
+    resource_type = "network-interface"
+    tags          = merge(var.tags, { Name = "${var.name}-app" })
+  }
+
   update_default_version = true
 
   lifecycle {
@@ -110,6 +115,24 @@ resource "aws_autoscaling_group" "app" {
   tag {
     key                 = "Name"
     value               = "${var.name}-app"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Project"
+    value               = var.tags["Project"]
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Managed"
+    value               = var.tags["Managed"]
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Group"
+    value               = var.tags["Group"]
     propagate_at_launch = true
   }
 }

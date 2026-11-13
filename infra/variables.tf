@@ -8,6 +8,12 @@ variable "project" {
   default = "art-gallery"
 }
 
+variable "group" {
+  description = "Group prefix applied as a resource tag."
+  type        = string
+  default     = "<GROUP>"
+}
+
 variable "alarm_email" {
   description = "Email address subscribed to CloudWatch alarm notifications"
   type        = string

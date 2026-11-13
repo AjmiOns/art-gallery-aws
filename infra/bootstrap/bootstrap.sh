@@ -14,6 +14,7 @@ set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
 PROJECT="${PROJECT:-art-gallery}"
+GROUP="${GROUP:-<GROUP>}"
 SUFFIX="${1:-${UNIQUE_SUFFIX:-}}"
 
 if ! [[ "$SUFFIX" =~ ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$ ]]; then
@@ -51,7 +52,7 @@ setup_bucket() {
   fi
 
   aws s3api put-bucket-tagging --bucket "$name" --tagging \
-    "TagSet=[{Key=Project,Value=$PROJECT},{Key=Managed,Value=bootstrap-script},{Key=Lifecycle,Value=persistent},{Key=Purpose,Value=$purpose}]"
+    "TagSet=[{Key=Project,Value=$PROJECT},{Key=Managed,Value=bootstrap-script},{Key=Group,Value=$GROUP},{Key=Lifecycle,Value=persistent},{Key=Purpose,Value=$purpose}]"
 }
 
 setup_bucket "$PROJECT-tfstate-$SUFFIX" "terraform-state"           yes

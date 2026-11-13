@@ -16,5 +16,6 @@ resource "aws_instance" "bastion" {
   subnet_id              = var.public_subnet_id
   vpc_security_group_ids = [var.bastion_sg_id]
   key_name               = var.key_name
-  tags                   = { Name = "${var.name}-bastion" }
+  tags                   = merge(var.tags, { Name = "${var.name}-bastion" })
+  volume_tags            = merge(var.tags, { Name = "${var.name}-bastion" })
 }
