@@ -27,8 +27,12 @@ data "aws_s3_bucket" "data" {
 }
 
 locals {
-  azs  = slice(data.aws_availability_zones.available.names, 0, 2)
-  tags = { Project = var.project, Managed = "terraform" }
+  azs = slice(data.aws_availability_zones.available.names, 0, 2)
+  tags = {
+    Project = var.project
+    Managed = "terraform"
+    Group   = var.group
+  }
 }
 
 module "network" {
@@ -57,6 +61,7 @@ module "compute" {
   key_name         = var.key_name
   public_subnet_id = module.network.public_subnet_ids[0]
   bastion_sg_id    = module.security.bastion_sg_id
+  tags             = local.tags
 }
 
 module "secrets" {

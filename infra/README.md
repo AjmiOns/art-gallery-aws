@@ -512,6 +512,10 @@ terraform output
 
 ### V1. Inventory of everything tagged for the project
 
+Common Terraform tags are `Project` (default `art-gallery`), `Managed=terraform`, and `Group` (default `<GROUP>`); resource-specific `Name` and existing subnet `Tier` tags are retained.
+ASG tags propagate `Name`, `Project`, `Managed`, and `Group`; the launch template applies common tags to instances, EBS volumes, and network interfaces.
+The bootstrap script applies `Group` to persistent S3 buckets alongside their existing `Project`, `Managed`, `Lifecycle`, and `Purpose` tags.
+
 ```bash
 aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=art-gallery \
   --query 'ResourceTagMappingList[].ResourceARN' --output text | tr '\t' '\n' | sed 's/:[0-9]\{12\}:/:ACCOUNT:/' | sort
