@@ -24,6 +24,12 @@ variable "alarm_email" {
   type        = string
 }
 
+variable "log_retention_days" {
+  description = "Number of days CloudWatch log groups retain events."
+  type        = number
+  default     = 7
+}
+
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"

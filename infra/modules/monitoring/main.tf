@@ -1,3 +1,27 @@
+resource "aws_cloudwatch_log_group" "boot" {
+  name              = "/${var.name}/boot"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "nginx_access" {
+  name              = "/${var.name}/nginx-access"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "nginx_error" {
+  name              = "/${var.name}/nginx-error"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/${var.name}/app"
+  retention_in_days = var.log_retention_days
+  tags              = var.tags
+}
+
 resource "aws_sns_topic" "alarm_notifications" {
   name = "${var.name}-alarm-notifications"
   tags = var.tags
@@ -178,6 +202,19 @@ resource "aws_cloudwatch_dashboard" "operations" {
           metrics = [
             ["AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", var.db_instance_identifier, { stat = "Minimum", label = "Free bytes" }],
           ]
+        }
+      },
+      {
+        type   = "log"
+        x      = 0
+        y      = 15
+        width  = 24
+        height = 6
+        properties = {
+          title  = "Latest application errors"
+          view   = "table"
+          region = var.region
+          query  = "SOURCE '${aws_cloudwatch_log_group.app.name}' | fields @timestamp, @message | filter @message like /ERROR/ | sort @timestamp desc | limit 20"
         }
       },
     ]

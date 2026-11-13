@@ -200,6 +200,10 @@ The applied v2 baseline has 41 resources. The current configuration adds two met
 - Capacity remains minimum 2, desired 2, maximum 3 instances.
 - Test during the planned T11 k6 load test, then inspect ASG scaling activities and the `asg_cpu_scaling_policy_name` output.
 
+CloudWatch groups cover boot, nginx access/error, and `art-gallery.service` journal logs under `/art-gallery/`.
+Terraform applies seven-day retention and owns the groups so `terraform destroy` removes them.
+Log forwarding is deferred; the groups and dashboard query remain empty until an agent is configured.
+
 ## Project structure
 
 ```

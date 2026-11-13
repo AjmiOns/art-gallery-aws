@@ -10,6 +10,10 @@ variable "alarm_email" {
   type = string
 }
 
+variable "log_retention_days" {
+  type = number
+}
+
 variable "alb_arn_suffix" {
   type = string
 }
