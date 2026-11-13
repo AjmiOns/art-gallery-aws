@@ -7,6 +7,10 @@ variable "app_sg_id" { type = string }
 variable "app_subnet_ids" { type = list(string) }
 variable "target_group_arn" { type = string }
 variable "tags" { type = map(string) }
+variable "log_group_boot" { type = string }
+variable "log_group_nginx_access" { type = string }
+variable "log_group_nginx_error" { type = string }
+variable "log_group_app" { type = string }
 
 variable "ami_id" {
   description = "Pin an AMI. null = latest Amazon Linux 2023."

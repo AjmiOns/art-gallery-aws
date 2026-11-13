@@ -109,14 +109,18 @@ module "monitoring" {
 }
 
 module "asg" {
-  source           = "./modules/asg"
-  name             = var.project
-  region           = var.region
-  instance_type    = var.instance_type
-  key_name         = var.key_name
-  instance_profile = var.instance_profile
-  ami_id           = var.ami_id
-  tags             = local.tags
+  source                 = "./modules/asg"
+  name                   = var.project
+  region                 = var.region
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  instance_profile       = var.instance_profile
+  ami_id                 = var.ami_id
+  tags                   = local.tags
+  log_group_boot         = module.monitoring.log_group_names.boot
+  log_group_nginx_access = module.monitoring.log_group_names.nginx_access
+  log_group_nginx_error  = module.monitoring.log_group_names.nginx_error
+  log_group_app          = module.monitoring.log_group_names.app
 
   app_sg_id        = module.security.app_sg_id
   app_subnet_ids   = module.network.app_subnet_ids
