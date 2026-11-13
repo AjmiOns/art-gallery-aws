@@ -11,7 +11,7 @@ variable "project" {
 variable "group" {
   description = "Group prefix applied as a resource tag."
   type        = string
-  default     = "VALUE"
+  default     = "tek26"
 
   validation {
     condition     = can(regex("^[A-Za-z0-9-]{1,32}$", var.group))
