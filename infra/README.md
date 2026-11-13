@@ -194,6 +194,12 @@ The applied v2 baseline has 41 resources. The current configuration adds two met
 | Monitoring | Operations dashboard, ALB and RDS metrics, two alarms; SNS email notifications pending | `monitoring` |
 | Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023) | root / `asg` |
 
+### ASG CPU target tracking
+- The ASG scales its capacity to keep average CPU utilization near the target.
+- CPU target: 60%; estimated instance warmup: 300 seconds.
+- Capacity remains minimum 2, desired 2, maximum 3 instances.
+- Test during the planned T11 k6 load test, then inspect ASG scaling activities and the `asg_cpu_scaling_policy_name` output.
+
 ## Project structure
 
 ```
@@ -956,6 +962,7 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 | TLS to PostgreSQL | `db_force_ssl = false` (RDS PostgreSQL 15+ forces TLS by default) | Traffic stays in the private VPC. Set `true` once the API connects with TLS (`DB_SSL`, see the [backend](../backend/README.md#configuration)) |
 | Secrets in state | Generated values are also in the Terraform state | Keep the state in the private, encrypted, versioned bucket |
 | HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
+| ASG CPU target tracking | Scale-in is intentionally slow by design; AWS creates the policy's CloudWatch alarms and deletes them automatically with the policy | Expected behavior; observe it during the T11 load test |
 | Remote state | Main stack uses a local state file | Migrate it to the S3 state bucket |
 | `npm ci` at boot | Depends on the npm registry through the NAT | Bundle `node_modules` in the artifact if it becomes a problem |
 
