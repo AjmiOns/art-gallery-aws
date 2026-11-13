@@ -14,7 +14,7 @@ set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
 PROJECT="${PROJECT:-art-gallery}"
-GROUP="${GROUP:-<GROUP>}"
+GROUP="${GROUP:-VALUE}"
 SUFFIX="${1:-${UNIQUE_SUFFIX:-}}"
 
 if ! [[ "$SUFFIX" =~ ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$ ]]; then

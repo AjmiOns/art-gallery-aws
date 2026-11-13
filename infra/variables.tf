@@ -11,7 +11,12 @@ variable "project" {
 variable "group" {
   description = "Group prefix applied as a resource tag."
   type        = string
-  default     = "<GROUP>"
+  default     = "VALUE"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9-]{1,32}$", var.group))
+    error_message = "The group tag must contain 1 to 32 letters, digits, or hyphens."
+  }
 }
 
 variable "alarm_email" {
