@@ -30,6 +30,11 @@ output "cloudwatch_dashboard_name" {
   value       = module.monitoring.dashboard_name
 }
 
+output "cloudwatch_log_group_names" {
+  description = "CloudWatch log groups for boot, nginx, and the application"
+  value       = module.monitoring.log_group_names
+}
+
 output "asg_cpu_scaling_policy_name" {
   description = "Name of the ASG CPU target-tracking policy"
   value       = module.asg.cpu_scaling_policy_name

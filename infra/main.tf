@@ -101,6 +101,7 @@ module "monitoring" {
   name                    = var.project
   region                  = var.region
   alarm_email             = var.alarm_email
+  log_retention_days      = var.log_retention_days
   alb_arn_suffix          = module.alb.alb_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
   db_instance_identifier  = module.rds.identifier
