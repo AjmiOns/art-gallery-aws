@@ -13,6 +13,7 @@ dist-artifacts
 !.env.local.example
 *.pem
 *.zip
+.~lock.*#
 # Terraform
 .terraform/
 *.tfstate
@@ -36,4 +37,5 @@ dist-artifacts/
 
 # database dumps (contain user data)
 gallery.sql
+*.sql
 *.dump
