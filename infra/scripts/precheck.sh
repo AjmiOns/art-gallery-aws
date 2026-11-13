@@ -20,8 +20,13 @@ fi
 
 extract_tfvar() {
   local name="$1"
-  grep -E "^[[:space:]]*${name}[[:space:]]*=" "$TFVARS_FILE" | head -n 1 \
-    | sed -E "s/^[[:space:]]*${name}[[:space:]]*=[[:space:]]*\"?([^\"]+)\"?[[:space:]]*$/\1/"
+  local assignment
+  assignment="$(grep -E "^[[:space:]]*${name}[[:space:]]*=" "$TFVARS_FILE" | head -n 1 || true)"
+  if [[ -z "$assignment" ]]; then
+    return 0
+  fi
+
+  sed -E "s/^[[:space:]]*${name}[[:space:]]*=[[:space:]]*\"?([^\"]+)\"?[[:space:]]*$/\1/" <<< "$assignment"
 }
 
 unique_suffix="$(extract_tfvar unique_suffix)"
