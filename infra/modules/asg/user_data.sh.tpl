@@ -2,11 +2,7 @@
 # Boot script of every app instance (Launch Template user_data).
 # No secret in this file: passwords are read from SSM Parameter Store at boot.
 # Do NOT add "set -x": it would print the secrets in the logs.
-# Terraform log groups (agent configuration is added in a follow-up change):
-# boot=${log_group_boot}
-# nginx access=${log_group_nginx_access}
-# nginx error=${log_group_nginx_error}
-# app=${log_group_app}
+# Terraform supplies the log group names used in the CloudWatch agent config below.
 set -u
 exec > >(tee -a /var/log/art-gallery-boot.log) 2>&1
 
@@ -20,6 +16,76 @@ echo "=== art-gallery boot: version $VER, $(date -u +%FT%TZ)"
 # ---- 1. packages (outbound access through the NAT Gateway) ----
 dnf install -y nginx
 dnf install -y nodejs20 nodejs20-npm || dnf install -y nodejs nodejs-npm
+
+# Prepare the application log before the agent starts watching files.
+id appuser >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin appuser
+touch /var/log/art-gallery-app.log
+chown appuser:appuser /var/log/art-gallery-app.log
+chmod 640 /var/log/art-gallery-app.log
+cat > /etc/logrotate.d/art-gallery <<'ROTATE'
+/var/log/art-gallery-app.log {
+  weekly
+  rotate 2
+  compress
+  missingok
+  notifempty
+  copytruncate
+}
+ROTATE
+
+# ---- 1b. CloudWatch agent (non-fatal: LabInstanceProfile may lack Logs writes) ----
+CW_AGENT_CONFIG=/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+if dnf install -y amazon-cloudwatch-agent; then
+  if mkdir -p "$(dirname "$CW_AGENT_CONFIG")"; then
+    if cat > "$CW_AGENT_CONFIG" <<'CW_CONFIG'
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/art-gallery-boot.log",
+            "log_group_name": "${log_group_boot}",
+            "log_stream_name": "{instance_id}",
+            "initial_position": "start_of_file"
+          },
+          {
+            "file_path": "/var/log/nginx/access.log",
+            "log_group_name": "${log_group_nginx_access}",
+            "log_stream_name": "{instance_id}",
+            "initial_position": "start_of_file"
+          },
+          {
+            "file_path": "/var/log/nginx/error.log",
+            "log_group_name": "${log_group_nginx_error}",
+            "log_stream_name": "{instance_id}",
+            "initial_position": "start_of_file"
+          },
+          {
+            "file_path": "/var/log/art-gallery-app.log",
+            "log_group_name": "${log_group_app}",
+            "log_stream_name": "{instance_id}",
+            "initial_position": "start_of_file"
+          }
+        ]
+      }
+    }
+  }
+}
+CW_CONFIG
+    then
+      if ! chmod 600 "$CW_AGENT_CONFIG" || ! /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c "file:$CW_AGENT_CONFIG" -s; then
+        echo "cloudwatch agent setup failed; continuing without log shipping"
+      fi
+    else
+      echo "cloudwatch agent config write failed; continuing without log shipping"
+    fi
+  else
+    echo "cloudwatch agent config directory failed; continuing without log shipping"
+  fi
+else
+  echo "cloudwatch agent install failed; continuing without log shipping"
+fi
 
 # ---- 2. secrets from SSM Parameter Store (instance role, no key in the file) ----
 get_param() {
@@ -35,7 +101,6 @@ JWT_SECRET=$(get_param "${ssm_jwt_secret}")
 ADMIN_PASSWORD=$(get_param "${ssm_admin_password}")
 
 # ---- 3. application artifacts from S3 (through the S3 gateway endpoint) ----
-id appuser >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /sbin/nologin appuser
 mkdir -p "$APP_DIR/backend/uploads" /usr/share/nginx/html
 
 MODE=fallback
@@ -134,6 +199,8 @@ User=appuser
 WorkingDirectory=$APP_DIR/backend
 EnvironmentFile=/etc/art-gallery.env
 ExecStart=$EXEC
+StandardOutput=append:/var/log/art-gallery-app.log
+StandardError=append:/var/log/art-gallery-app.log
 Restart=always
 RestartSec=3
 
