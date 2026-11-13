@@ -17,6 +17,8 @@ variable "ami_id" {
 variable "min_size" { type = number }
 variable "max_size" { type = number }
 variable "desired_capacity" { type = number }
+variable "scale_cpu_target" { type = number }
+variable "estimated_instance_warmup" { type = number }
 
 # ---- boot script inputs (no secret values, only names of SSM parameters) ----
 variable "artifact_bucket" { type = string }

@@ -115,6 +115,23 @@ variable "asg_desired_capacity" {
   default = 2
 }
 
+variable "scale_cpu_target" {
+  description = "Target average CPU utilization percentage for ASG target tracking."
+  type        = number
+  default     = 60
+
+  validation {
+    condition     = var.scale_cpu_target >= 20 && var.scale_cpu_target <= 90
+    error_message = "scale_cpu_target must be between 20 and 90 percent."
+  }
+}
+
+variable "estimated_instance_warmup" {
+  description = "Estimated seconds for a newly launched ASG instance to warm up."
+  type        = number
+  default     = 300
+}
+
 variable "ami_id" {
   description = "Pin an AMI id. null = latest Amazon Linux 2023."
   type        = string

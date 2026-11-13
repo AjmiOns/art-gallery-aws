@@ -121,9 +121,11 @@ module "asg" {
   app_subnet_ids   = module.network.app_subnet_ids
   target_group_arn = module.alb.target_group_arn
 
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
+  min_size                  = var.asg_min_size
+  max_size                  = var.asg_max_size
+  desired_capacity          = var.asg_desired_capacity
+  scale_cpu_target          = var.scale_cpu_target
+  estimated_instance_warmup = var.estimated_instance_warmup
 
   artifact_bucket    = data.aws_s3_bucket.data.id
   app_version        = var.app_version
