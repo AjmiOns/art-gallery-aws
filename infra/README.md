@@ -512,7 +512,7 @@ terraform output
 
 ### V1. Inventory of everything tagged for the project
 
-Common Terraform tags are `Project` (default `art-gallery`), `Managed=terraform`, and `Group` (default `VALUE`); resource-specific `Name` and existing subnet `Tier` tags are retained.
+Common Terraform tags are `Project` (default `art-gallery`), `Managed=terraform`, and `Group` (default `tek26`); resource-specific `Name` and existing subnet `Tier` tags are retained.
 ASG tags propagate `Name`, `Project`, `Managed`, and `Group`; the launch template applies common tags to instances, EBS volumes, and network interfaces.
 The bootstrap script applies `Group` to persistent S3 buckets alongside their existing `Project`, `Managed`, `Lifecycle`, and `Purpose` tags.
 
