@@ -10,5 +10,6 @@ if [[ ! "$admin_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
 fi
 
 echo "Using $admin_ip/32 for bastion SSH access."
+./scripts/precheck.sh
 terraform apply -var="admin_cidr=${admin_ip}/32" "$@"
-./backup-state.sh
+./scripts/backup-state.sh

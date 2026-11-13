@@ -3,6 +3,14 @@
 set -uo pipefail
 REGION="${AWS_REGION:-us-east-1}"
 
+# Remove the local backup copy that was kept only as a safety net.
+rm -f "./state-backups/terraform.tfstate" "./state-backups/terraform.tfstate.backup" "./state-backups/.terraform.tfstate.backup.tmp" 2>/dev/null || true
+
+# If the folder is empty afterwards, it can stay as a placeholder or be removed.
+if [ -d "./state-backups" ] && [ -z "$(ls -A ./state-backups 2>/dev/null)" ]; then
+  rmdir "./state-backups" 2>/dev/null || true
+fi
+
 echo ">>> terraform destroy"
 terraform destroy -auto-approve || { echo "DESTROY FAILED - fix it before leaving!"; exit 1; }
 
