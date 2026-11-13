@@ -33,6 +33,7 @@ cat > /etc/logrotate.d/art-gallery <<'ROTATE'
 }
 ROTATE
 
+# initial_position is not supported by the agent config schema; do not add it
 # ---- 1b. CloudWatch agent (non-fatal: LabInstanceProfile may lack Logs writes) ----
 CW_AGENT_CONFIG=/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 if dnf install -y amazon-cloudwatch-agent; then
@@ -46,26 +47,22 @@ if dnf install -y amazon-cloudwatch-agent; then
           {
             "file_path": "/var/log/art-gallery-boot.log",
             "log_group_name": "${log_group_boot}",
-            "log_stream_name": "{instance_id}",
-            "initial_position": "start_of_file"
+            "log_stream_name": "{instance_id}"
           },
           {
             "file_path": "/var/log/nginx/access.log",
             "log_group_name": "${log_group_nginx_access}",
-            "log_stream_name": "{instance_id}",
-            "initial_position": "start_of_file"
+            "log_stream_name": "{instance_id}"
           },
           {
             "file_path": "/var/log/nginx/error.log",
             "log_group_name": "${log_group_nginx_error}",
-            "log_stream_name": "{instance_id}",
-            "initial_position": "start_of_file"
+            "log_stream_name": "{instance_id}"
           },
           {
             "file_path": "/var/log/art-gallery-app.log",
             "log_group_name": "${log_group_app}",
-            "log_stream_name": "{instance_id}",
-            "initial_position": "start_of_file"
+            "log_stream_name": "{instance_id}"
           }
         ]
       }
