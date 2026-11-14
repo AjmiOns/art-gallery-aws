@@ -102,13 +102,18 @@ resource "aws_autoscaling_group" "app" {
     version = aws_launch_template.app.latest_version
   }
 
-  # New launch template version (for example a new app_version) = rolling
-  # replacement, one instance at a time: no total interruption of the service.
-  instance_refresh {
-    strategy = "Rolling"
-    preferences {
-      min_healthy_percentage = 50
-      instance_warmup        = 180
+  # Optional rolling replacement when the launch template changes. It calls
+  # autoscaling:StartInstanceRefresh, which the AWS Academy lab SCP denies, so
+  # it is disabled by default. Without it, a new launch template version only
+  # applies to new instances: replace the running ones by hand (README, T8).
+  dynamic "instance_refresh" {
+    for_each = var.enable_instance_refresh ? [1] : []
+    content {
+      strategy = "Rolling"
+      preferences {
+        min_healthy_percentage = 50
+        instance_warmup        = 180
+      }
     }
   }
 
