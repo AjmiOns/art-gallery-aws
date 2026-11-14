@@ -30,6 +30,17 @@ variable "log_retention_days" {
   default     = 7
 }
 
+variable "alb_5xx_alarm_threshold" {
+  description = "Number of 5xx responses returned by the instances in one minute that triggers the 5xx alarm."
+  type        = number
+  default     = 5
+
+  validation {
+    condition     = var.alb_5xx_alarm_threshold >= 1
+    error_message = "alb_5xx_alarm_threshold must be at least 1."
+  }
+}
+
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"
