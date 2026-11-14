@@ -131,6 +131,7 @@ module "asg" {
   desired_capacity          = var.asg_desired_capacity
   scale_cpu_target          = var.scale_cpu_target
   estimated_instance_warmup = var.estimated_instance_warmup
+  enable_instance_refresh   = var.enable_instance_refresh
 
   artifact_bucket    = data.aws_s3_bucket.data.id
   app_version        = var.app_version

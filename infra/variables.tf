@@ -89,7 +89,7 @@ variable "unique_suffix" {
 }
 
 variable "app_version" {
-  description = "Artifact version in S3: artifacts/backend-<v>.tar.gz and artifacts/frontend-<v>.tar.gz. Changing it replaces the instances one by one."
+  description = "Artifact version in S3: artifacts/backend-<v>.tar.gz and artifacts/frontend-<v>.tar.gz. Changing it creates a new launch template version used by new instances. Running instances are replaced manually (see T8 in the README): the lab denies StartInstanceRefresh."
   type        = string
   default     = "v1"
 }
@@ -149,6 +149,12 @@ variable "db_name" {
   default = "art_gallery"
 }
 
+variable "enable_instance_refresh" {
+  description = "Requires autoscaling:StartInstanceRefresh. The AWS Academy lab SCP denies it, so keep false in the lab."
+  type        = bool
+  default     = false
+}
+
 variable "db_username" {
   type    = string
   default = "gallery"
@@ -160,8 +166,9 @@ variable "db_instance_class" {
 }
 
 variable "db_engine_version" {
-  type    = string
-  default = "16"
+  description = "PostgreSQL major version of the RDS instance. Must match db_parameter_group_family (16 -> postgres16)."
+  type        = string
+  default     = "16"
 }
 
 variable "db_parameter_group_family" {
