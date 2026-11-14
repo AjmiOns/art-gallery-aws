@@ -10,15 +10,15 @@ TODO before submission (delete this block when done):
 
 ![Terraform](https://img.shields.io/badge/Terraform-v2%20applied%20and%20verified-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
-![Resources](https://img.shields.io/badge/resources-41-blue)
+![Resources](https://img.shields.io/badge/resources-51-blue)
 
 Infrastructure as Code for the **Online Art Gallery** project ([project overview](../README.md)), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
 
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
-- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 41 resources, the real application answers behind the load balancer. The current configuration adds two CloudWatch alarms, pending the next apply.
+- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 51 resources (network, ALB, Auto Scaling Group with a CPU scaling policy, RDS, secrets, CloudWatch log groups and alarms), the real application answers behind the load balancer.
 - **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
 - **Images uploaded from a computer go to S3 automatically** (`artworks/uploads/` in the persistent data bucket) and are served by the API. What lives in the buckets, the commands and the cost: [S3.md](S3.md).
-- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, CloudWatch log shipping, k6 load test.
+- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, k6 load test. CloudWatch log shipping is done: every instance sends its boot, nginx and application logs to the four `/art-gallery/*` log groups.
 
 > **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
 
@@ -137,7 +137,7 @@ Constraints that decide the answer:
 1. **It matches the cahier exactly.** S3 is on the list, the instances come from a Launch Template with `user_data`, and no credential appears anywhere: the instance role reads S3 and SSM by itself.
 2. **Smallest upload.** A few MB instead of a ~224 MB image. Uploads only happen **when the code changes**, never during a normal apply/destroy cycle, because the bucket is persistent.
 3. **Fast and light boot.** No Docker install, no image load, no daemon eating RAM on a 1 GB `t3.micro`. `npm ci` takes about 25 s.
-4. **Versioned and reversible.** `backend-v1.tar.gz` / `frontend-v1.tar.gz` are immutable by name. A new version is a new file plus one Terraform variable (`app_version`), which triggers an ASG **rolling replacement**: no total interruption.
+4. **Versioned and reversible.** `backend-v1.tar.gz` / `frontend-v1.tar.gz` are immutable by name. A new version is a new file plus one Terraform variable (`app_version`), which creates a new launch template version. The lab denies `autoscaling:StartInstanceRefresh`, so the running instances are replaced one at a time by hand (see [T8](#t8-new-version-without-total-interruption)): no total interruption.
 5. **Reproducible.** `package-lock.json` pins the dependency versions, and the artifact is the same on every instance.
 6. **Safe fallback.** If the artifacts are missing, the instance still boots in *fallback mode* and answers `/api/health`, so the infrastructure can be demonstrated before the application is packaged.
 
@@ -178,9 +178,9 @@ How the site and API are built is described in the [frontend](../frontend/README
 | Instance metadata | IMDSv2 required, hop limit 2 | IMDSv1 | Security hardening. Hop limit 2 lets the AWS SDK work if a container is ever used |
 | Deregistration delay | 30 s | 300 s default | Faster demos and faster destroy |
 
-## What is deployed (41-resource baseline)
+## What is deployed (51-resource baseline)
 
-The applied v2 baseline has 41 resources. The current configuration adds two metric alarms, which will exist in AWS after the next apply. Full list: `terraform state list`.
+The applied v2 baseline has 51 resources, including the CloudWatch log groups, the scaling policy and the alarms. Full list: `terraform state list`.
 
 | Area | Resources | Module |
 |---|---|---|
@@ -515,8 +515,8 @@ STATE=art-gallery-tfstate-$SUFFIX
 
 ```bash
 aws sts get-caller-identity --query '[Arn]' --output text      # blur the account ID
-terraform state list | wc -l                                    # expected: 45 (41 resources + 4 data sources)
-terraform state list | grep -vE '(^|\.)data\.' | wc -l          # expected: 41 (resources only)
+terraform state list | wc -l                                    # expected: 55 (51 resources + 4 data sources), check against your own run
+terraform state list | grep -vE '(^|\.)data\.' | wc -l          # expected: 51 (resources only), check against your own run
 terraform output
 ```
 
@@ -858,10 +858,23 @@ Expected: the loop keeps printing `200` (an occasional non-200 for a few seconds
 
 ```bash
 # upload backend-v2 / frontend-v2 (same commands as above, v2 in the file names), then:
-terraform apply -var app_version=v2     # rolling replacement, one instance at a time
+terraform apply -var app_version=v2     # new launch template version; running instances are NOT replaced
 ```
 
-While it runs, keep the loop from T7 open. Expected: the answers stay `200` and the instances are replaced one by one (`aws autoscaling describe-instance-refreshes --auto-scaling-group-name art-gallery-asg`). Rollback is `terraform apply -var app_version=v1`.
+The lab denies `autoscaling:StartInstanceRefresh`, so `enable_instance_refresh` stays `false` and the replacement is done by hand, one instance at a time:
+
+```bash
+# 1. which launch template version does each instance run? (the old ones show the previous number)
+aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names art-gallery-asg \
+  --query 'AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState,LaunchTemplate.Version]' --output text
+# 2. terminate ONE old instance: the ASG launches a replacement from the new version
+aws ec2 terminate-instances --instance-ids <OLD_INSTANCE_ID>
+# 3. wait until the target group shows 2 healthy targets again, then repeat step 2 for the other old instance
+aws elbv2 describe-target-health --target-group-arn <TARGET_GROUP_ARN> \
+  --query 'TargetHealthDescriptions[].[Target.Id,TargetHealth.State]' --output text
+```
+
+While it runs, keep the loop from T7 open. Expected: the answers stay `200` because the other instance keeps serving. Record the time until each replacement is `healthy`. Rollback is `terraform apply -var app_version=v1` followed by the same manual replacement.
 
 *Screenshot: [T8 rolling update](EVIDENCE.md#t8-new-version-without-total-interruption)*
 
@@ -970,13 +983,16 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 | HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
 | ASG CPU target tracking | Scale-in is intentionally slow by design; AWS creates the policy's CloudWatch alarms and deletes them automatically with the policy | Expected behavior; observe it during the T11 load test |
 | CloudWatch Logs delivery | If `LabInstanceProfile` cannot write to CloudWatch Logs, the groups stay empty | Agent setup is non-fatal; the app still runs |
-| Remote state | Main stack uses a local state file | Migrate it to the S3 state bucket |
+| Remote state | The state is stored in the private S3 state bucket with locking (`versions.tf`, `backend.hcl`). A local copy goes to `state-backups/` after each apply and is removed after a successful destroy | A crashed Terraform run can leave a stale lock: check that no other run is active, then `terraform force-unlock <ID>` |
+| Instance refresh | The lab SCP denies `autoscaling:StartInstanceRefresh`, so `enable_instance_refresh` is `false` | Replace instances by hand (T8) |
+| CloudFront | Not available in the lab account: all traffic goes through the ALB | Matches the HTTP-only row above |
+| Leftover check | `destroy.sh` only fails for resources tagged `Project=art-gallery` (ALB, RDS and RDS snapshots by name prefix). Other resources in the account are listed as ignored and never touched | An untagged resource leaked by this project would not make the check fail |
 | `npm ci` at boot | Depends on the npm registry through the NAT | Bundle `node_modules` in the artifact if it becomes a problem |
 
 ## Security notes
 
 - Never commit `terraform.tfvars`, `*.tfstate`, `.terraform/`, `labsuser.pem` or AWS credentials (covered by `.gitignore`). Commit `.terraform.lock.hcl`.
-- Keep `terraform.tfstate` until you have run `destroy`: without it Terraform cannot find your resources.
+- The state lives in the private S3 state bucket: never delete that bucket before `destroy`, because Terraform cannot find your resources without the state.
 - User passwords are stored as bcrypt hashes and card numbers are never stored (only the brand and the last 4 digits): verified on the live database in [T12](#t12-sensitive-data-passwords-and-cards).
 - The database password, JWT secret and admin password are generated by Terraform, stored in SSM Parameter Store and never in Git or in `user_data`. Read the admin password with `terraform output read_admin_password`.
 - `seed/gallery.sql` contains users' emails and password hashes. It stays in the private, encrypted data bucket. Never commit it, and delete any temporary copy (`tmp/` prefix, `/tmp` on an instance) after use.
