@@ -30,7 +30,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Architecture](#architecture)
 - [How do we deploy the application? Options compared](#how-do-we-deploy-the-application-options-compared)
 - [Other decisions](#other-decisions)
-- [What is deployed (41-resource baseline)](#what-is-deployed-41-resource-baseline)
+- [What is deployed (51-resource baseline)](#what-is-deployed-51-resource-baseline)
 - [Project structure](#project-structure)
 - [Bootstrap (persistent buckets)](#bootstrap-persistent-buckets)
 - [How an instance boots](#how-an-instance-boots)
@@ -191,7 +191,7 @@ The applied v2 baseline has 51 resources, including the CloudWatch log groups, t
 | Load balancer | ALB, target group (`/api/health`, 15 s), HTTP :80 listener | `alb` |
 | Database | RDS PostgreSQL instance + parameter group | `rds` |
 | Application | Launch Template, Auto Scaling Group (min 2, max 3, one instance per AZ) | `asg` |
-| Monitoring | Operations dashboard, ALB and RDS metrics, two alarms; SNS email notifications pending | `monitoring` |
+| Monitoring | Operations dashboard, ALB and RDS metrics, 4 log groups, three alarms (unhealthy hosts, target 5xx, RDS CPU), SNS e-mail notifications (confirm the subscription e-mail after each apply) | `monitoring` |
 | Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023) | root / `asg` |
 
 ### ASG CPU target tracking
@@ -726,6 +726,7 @@ Each test: what it proves, the commands, the expected result, a screenshot. Run 
 | T10 | Rebuild from zero, timed | Rebuild target | partly done (11.5 min fallback) |
 | T11 | Load test (k6) | 50 concurrent users, 100 peak | planned |
 | T12 | Sensitive data: password hashes and card data | Passwords stored as bcrypt hashes, no card number or security code stored | done, see [RDS.md](RDS.md#5-verification-passwords-and-cards) |
+| T13 | Alarms: trigger each one | Monitoring and notifications | to do, see [T13](#t13-alarms-trigger-each-one) |
 
 ### T1. Health endpoint
 
@@ -931,6 +932,44 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 
 ![payments hold only brand and last 4 digits](images/screenshots/v2-t12-4-payments-table.png)
 
+### T13. Alarms: trigger each one
+
+Three alarms send an e-mail through the SNS topic `art-gallery-alarm-notifications`. After every apply AWS sends a new confirmation e-mail to the address in `alarm_email`: click its link, or no notification arrives.
+
+| Alarm | Metric and rule | How to trigger it |
+|---|---|---|
+| `art-gallery-alb-unhealthy-hosts` | `UnHealthyHostCount` above 0 for 2 consecutive minutes | Stop the API on one instance (commands below). Back to OK when the instance is restarted or replaced |
+| `art-gallery-alb-target-5xx` | `HTTPCode_Target_5XX_Count`, sum of `alb_5xx_alarm_threshold` (default 5) or more in 1 minute | Stop the API on one instance, then send requests: nginx answers 502 until the ALB marks the target unhealthy |
+| `art-gallery-rds-high-cpu` | RDS CPU average above 80% for 2 periods of 5 minutes | Not practical on a `db.t3.micro` in a demo. Show it in state OK, or test the e-mail path with `aws cloudwatch set-alarm-state` if the lab allows it |
+
+The scaling policy also owns CloudWatch alarms created and deleted by AWS (see [ASG CPU target tracking](#asg-cpu-target-tracking)).
+
+```bash
+cd infra
+KEY=labsuser.pem
+BASTION=$(terraform output -raw bastion_public_ip)
+URL=$(terraform output -raw app_url)
+eval "$(terraform output -raw list_app_instances)"          # shows the private IPs of the instances
+IP=<private IP of ONE instance>
+onhost() { ssh -i $KEY -o StrictHostKeyChecking=accept-new \
+  -o ProxyCommand="ssh -i $KEY -o StrictHostKeyChecking=accept-new -W %h:%p ec2-user@$BASTION" ec2-user@$IP "$1"; }
+
+# 1. stop the API (nginx stays up and answers 502 for /api/)
+onhost 'sudo systemctl stop art-gallery'
+
+# 2. send requests for about 90 seconds and count the status codes
+for i in $(seq 1 300); do curl -s -o /dev/null -w '%{http_code}\n' "$URL/api/health"; sleep 0.3; done | sort | uniq -c
+
+# 3. keep the API stopped for at least 3 minutes, then read the alarm states
+aws cloudwatch describe-alarms --region us-east-1 --alarm-name-prefix art-gallery \
+  --query 'MetricAlarms[].[AlarmName,StateValue]' --output text
+
+# 4. recover (or wait for the ASG to replace the unhealthy instance)
+onhost 'sudo systemctl start art-gallery'
+```
+
+Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or so (3 failed health checks of 15 s), then only `200`, because the other instance keeps serving. The 5xx alarm should go to `ALARM` within a minute or two and the unhealthy-hosts alarm after two consecutive minutes; each sends an e-mail, and each returns to `OK` after recovery. This procedure has not been run yet: record the real counts and the time from the stop to the e-mail, and take a screenshot of the alarm status widget on the dashboard.
+
 ## Non-functional objectives
 
 | Objective | Target | Status |
@@ -965,8 +1004,8 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 - [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
 - [x] S3 remote state with bucket versioning, native locking and local backups
 - [x] CloudWatch dashboard and metric alarms deployed
-- [ ] SNS email notifications configured (apply pending; confirm the SNS subscription email)
-- [ ] CloudWatch log shipping
+- [x] SNS e-mail notifications configured and tested (an alarm e-mail was received)
+- [x] CloudWatch log shipping (4 log groups, one stream per instance)
 - [ ] k6 load test and real-mode rebuild timing
 - [ ] boto3 scripts (RDS snapshot and restore, resilience test, cost report)
 - [ ] Optional: ECR registry in `bootstrap/` as an upgrade of the deployment method
