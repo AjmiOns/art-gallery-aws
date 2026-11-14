@@ -14,6 +14,10 @@ variable "log_retention_days" {
   type = number
 }
 
+variable "alb_5xx_alarm_threshold" {
+  type = number
+}
+
 variable "alb_arn_suffix" {
   type = string
 }

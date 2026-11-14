@@ -56,6 +56,31 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
   tags = var.tags
 }
 
+# 5xx answers produced by the instances (nginx returns 502 when the API is down).
+# The metric only exists while errors happen: no data means no error.
+resource "aws_cloudwatch_metric_alarm" "alb_target_5xx" {
+  alarm_name          = "${var.name}-alb-target-5xx"
+  alarm_description   = "The instances returned ${var.alb_5xx_alarm_threshold} or more 5xx responses in one minute."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = var.alb_5xx_alarm_threshold
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarm_notifications.arn]
+  ok_actions          = [aws_sns_topic.alarm_notifications.arn]
+
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+    TargetGroup  = var.target_group_arn_suffix
+  }
+
+  tags = var.tags
+}
+
 resource "aws_cloudwatch_metric_alarm" "rds_high_cpu" {
   alarm_name          = "${var.name}-rds-high-cpu"
   alarm_description   = "RDS CPU utilization exceeds 80 percent for ten consecutive minutes."
@@ -93,6 +118,7 @@ resource "aws_cloudwatch_dashboard" "operations" {
           title = "Alarm status"
           alarms = [
             aws_cloudwatch_metric_alarm.alb_unhealthy_hosts.arn,
+            aws_cloudwatch_metric_alarm.alb_target_5xx.arn,
             aws_cloudwatch_metric_alarm.rds_high_cpu.arn,
           ]
         }
