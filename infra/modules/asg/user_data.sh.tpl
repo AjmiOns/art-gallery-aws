@@ -173,8 +173,8 @@ JWT_SECRET=$JWT_SECRET
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 S3_BUCKET=$BUCKET
 AWS_REGION=$REGION
-FRONTEND_URL=http://${public_host}
-PUBLIC_API_URL=http://${public_host}
+FRONTEND_URL=${public_scheme}://${public_host}
+PUBLIC_API_URL=${public_scheme}://${public_host}
 EOF
 chmod 600 /etc/art-gallery.env
 
