@@ -91,6 +91,30 @@ variable "app_port" {
 }
 
 # ---------------------------------------------------------------------------
+# HTTPS and custom domain (optional, off by default)
+# The Route 53 hosted zone and the ACM certificate are created ONCE, outside
+# Terraform, so they survive every destroy. Terraform only looks them up.
+# ---------------------------------------------------------------------------
+
+variable "enable_https" {
+  description = "true: HTTPS listener (443), HTTP redirect, and a DNS record for the app hostname"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "Domain whose public hosted zone already exists in Route 53"
+  type        = string
+  default     = "viewmyart.me"
+}
+
+variable "app_subdomain" {
+  description = "Subdomain of the application (the ACM certificate must be issued for <app_subdomain>.<domain_name>)"
+  type        = string
+  default     = "gallery"
+}
+
+# ---------------------------------------------------------------------------
 # Architecture v2 (ALB, Auto Scaling Group, RDS)
 # ---------------------------------------------------------------------------
 

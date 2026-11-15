@@ -10,11 +10,11 @@ output "vpc_id" {
 
 output "app_url" {
   description = "Open this in a browser: the only public entry point"
-  value       = "http://${module.alb.dns_name}"
+  value       = "${local.public_scheme}://${local.public_host}"
 }
 
 output "health_url" {
-  value = "http://${module.alb.dns_name}/api/health"
+  value = "${local.public_scheme}://${local.public_host}/api/health"
 }
 
 output "bastion_public_ip" {
