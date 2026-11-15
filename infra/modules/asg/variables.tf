@@ -35,6 +35,12 @@ variable "app_version" { type = string }
 variable "backend_entry" { type = string }
 variable "node_env" { type = string }
 variable "public_host" { type = string }
+
+variable "public_scheme" {
+  description = "http or https, used to build FRONTEND_URL and PUBLIC_API_URL"
+  type        = string
+  default     = "http"
+}
 variable "db_host" { type = string }
 variable "db_port" { type = number }
 variable "db_name" { type = string }

@@ -31,6 +31,7 @@ resource "aws_launch_template" "app" {
     backend_entry          = var.backend_entry
     node_env               = var.node_env
     public_host            = var.public_host
+    public_scheme          = var.public_scheme
     db_host                = var.db_host
     db_port                = var.db_port
     db_name                = var.db_name

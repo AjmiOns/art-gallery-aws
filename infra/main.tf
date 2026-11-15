@@ -26,7 +26,26 @@ data "aws_s3_bucket" "data" {
   bucket = "${var.project}-data-${var.unique_suffix}"
 }
 
+# HTTPS only: the zone and the ISSUED certificate are looked up, never created.
+# If the certificate is not ISSUED (or the zone is missing), plan fails here.
+data "aws_route53_zone" "app" {
+  count        = var.enable_https ? 1 : 0
+  name         = var.domain_name
+  private_zone = false
+}
+
+data "aws_acm_certificate" "app" {
+  count       = var.enable_https ? 1 : 0
+  domain      = "${var.app_subdomain}.${var.domain_name}"
+  statuses    = ["ISSUED"]
+  most_recent = true
+}
+
 locals {
+  app_hostname  = var.enable_https ? "${var.app_subdomain}.${var.domain_name}" : null
+  public_host   = var.enable_https ? local.app_hostname : module.alb.dns_name
+  public_scheme = var.enable_https ? "https" : "http"
+
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
   tags = {
     Project = var.project
@@ -76,6 +95,24 @@ module "alb" {
   public_subnet_ids = module.network.public_subnet_ids
   alb_sg_id         = module.security.alb_sg_id
   app_port          = var.app_port
+
+  enable_https    = var.enable_https
+  certificate_arn = one(data.aws_acm_certificate.app[*].arn)
+  https_hostname  = local.app_hostname
+}
+
+# DNS record for the application, created and destroyed with the stack.
+resource "aws_route53_record" "app" {
+  count   = var.enable_https ? 1 : 0
+  zone_id = data.aws_route53_zone.app[0].zone_id
+  name    = local.app_hostname
+  type    = "A"
+
+  alias {
+    name                   = module.alb.dns_name
+    zone_id                = module.alb.zone_id
+    evaluate_target_health = true
+  }
 }
 
 module "rds" {
@@ -138,7 +175,8 @@ module "asg" {
   app_version        = var.app_version
   backend_entry      = var.backend_entry
   node_env           = var.node_env
-  public_host        = module.alb.dns_name
+  public_host        = local.public_host
+  public_scheme      = local.public_scheme
   db_host            = module.rds.address
   db_port            = module.rds.port
   db_name            = var.db_name
