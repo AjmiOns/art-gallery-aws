@@ -4,18 +4,19 @@ TODO before submission (delete this block when done):
 2. Blur the admin IP, the AWS account ID and any password in each screenshot.
 3. Fill every "___" in the measurement tables (real-mode apply time, destroy time, artifact sizes, test results).
 4. Never screenshot the output of `--with-decryption` (it prints a secret).
+5. HTTPS: add `v2-13-https.png` (padlock, and the `curl -sI http://...` redirect). Blur the account ID and your IP.
 -->
 
 # Online Art Gallery - AWS Infrastructure (Terraform)
 
 ![Terraform](https://img.shields.io/badge/Terraform-v2%20applied%20and%20verified-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
-![Resources](https://img.shields.io/badge/resources-51-blue)
+![Resources](https://img.shields.io/badge/resources-52%20(54%20with%20HTTPS)-blue)
 
 Infrastructure as Code for the **Online Art Gallery** project ([project overview](../README.md)), deployed on **AWS Academy Learner Lab** (region `us-east-1`).
 
 - This README covers **infrastructure only**. The application is documented in its own READMEs: [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
-- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 51 resources (network, ALB, Auto Scaling Group with a CPU scaling policy, RDS, secrets, CloudWatch log groups and alarms), the real application answers behind the load balancer.
+- Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 52 resources (network, ALB, Auto Scaling Group with a CPU scaling policy, RDS, secrets, CloudWatch log groups and alarms), 54 with HTTPS. The real application answers behind the load balancer, and over HTTPS at `https://gallery.viewmyart.me` when `enable_https = true` ([HTTPS and custom domain](#https-and-custom-domain)).
 - **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
 - **Images uploaded from a computer go to S3 automatically** (`artworks/uploads/` in the persistent data bucket) and are served by the API. What lives in the buckets, the commands and the cost: [S3.md](S3.md).
 - Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, k6 load test. CloudWatch log shipping is done: every instance sends its boot, nginx and application logs to the four `/art-gallery/*` log groups.
@@ -30,7 +31,8 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - [Architecture](#architecture)
 - [How do we deploy the application? Options compared](#how-do-we-deploy-the-application-options-compared)
 - [Other decisions](#other-decisions)
-- [What is deployed (51-resource baseline)](#what-is-deployed-51-resource-baseline)
+- [HTTPS and custom domain](#https-and-custom-domain)
+- [What is deployed (52-resource baseline)](#what-is-deployed-52-resource-baseline)
 - [Project structure](#project-structure)
 - [Bootstrap (persistent buckets)](#bootstrap-persistent-buckets)
 - [How an instance boots](#how-an-instance-boots)
@@ -55,12 +57,12 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 | Item | Value |
 |---|---|
 | Region / account type | `us-east-1`, AWS Academy Learner Lab (`LabRole`, `LabInstanceProfile`) |
-| Resources in the main stack | **44 currently applied; 46 after email alerts** (SNS topic and subscription pending; 50 state-list entries after apply including 4 read-only data sources) |
-| Full build time (measured) | **about 11.5 minutes**: RDS 9 min 14 s is the critical path |
+| Resources in the main stack | **52** (54 with `enable_https = true`). `terraform state list` shows 56 entries (60 with HTTPS) because it also lists 4 read-only data sources (6 with HTTPS) |
+| Full build time (measured) | **14 min 17 s** in real mode with HTTPS (`./apply.sh`, 54 resources). Earlier fallback-mode run: 11.5 min. RDS (about 9 min) is the critical path |
 | Running cost | **about 0.15 USD per hour** (approximate, see [Cost](#cost)) |
 | Deployment method | Versioned **tar.gz artifacts in S3**, installed at boot by `user_data` (no Docker, no ECR) |
-| Entry point | One public URL: the ALB (`terraform output app_url`) |
-| Persistent between sessions | 2 S3 buckets (versioned and locked Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh` |
+| Entry point | One public URL: the ALB (`terraform output app_url`). With `enable_https = true`: `https://gallery.viewmyart.me` (HTTP redirects to HTTPS) |
+| Persistent between sessions | 2 S3 buckets (versioned and locked Terraform state; artifacts, images and the database seed `seed/gallery.sql`), created by `bootstrap/bootstrap.sh`. Also the Route 53 hosted zone and the ACM certificate, created once by hand (see [HTTPS](#https-and-custom-domain)) |
 | Uploaded images | Stored by the backend in `s3://<data bucket>/artworks/uploads/` and served at `/api/uploads/<file>` (see [S3.md](S3.md)) |
 | Database content after a rebuild | Restored by the first booting instance from `seed/gallery.sql` (no manual step). See [RDS.md](RDS.md) |
 | Destroyed every session | Everything else (`./destroy.sh`, ends with `OK: nothing billable left.`) |
@@ -95,7 +97,7 @@ Persistent (bootstrap/): S3 state bucket + S3 data bucket (artifacts/, artworks/
 
 | Security group | Accepts | From |
 |---|---|---|
-| `art-gallery-alb-sg` | 80 (443 reserved) | Internet |
+| `art-gallery-alb-sg` | 80, 443 (443 answers only when `enable_https = true`) | Internet |
 | `art-gallery-bastion-sg` | 22 | Admin IP only (`/32`) |
 | `art-gallery-app-sg` | 80 (nginx), 22 | `alb-sg`, `bastion-sg` |
 | `art-gallery-db-sg` | 5432 | `app-sg` only |
@@ -173,14 +175,84 @@ How the site and API are built is described in the [frontend](../frontend/README
 | Persistent buckets | `bootstrap/bootstrap.sh` (AWS CLI) | Terraform `aws_s3_bucket` | The Learner Lab denies `s3:GetBucketObjectLockConfiguration`, which the Terraform provider reads after creating any bucket (fails on v4, v5, v6). The main stack only *reads* the bucket with a data source |
 | Bucket layout | 1 data bucket, 2 prefixes (`artifacts/`, `artworks/`) + 1 state bucket | Separate buckets per use | Fewer resources, simpler leftover check |
 | Database | RDS PostgreSQL 16, `db.t3.micro`, **single-AZ**, encrypted, 7-day backups | Multi-AZ, DB in a container on EC2 | Multi-AZ doubles RDS hours and is not required. A DB on an ASG instance would vanish at replacement, and the cahier requires RDS with backups |
-| Load balancer protocol | HTTP :80 | HTTPS with ACM | No domain name, so no certificate in the lab |
+| Load balancer protocol | HTTP :80 by default. With `enable_https = true`: HTTPS :443 (ACM certificate) and port 80 redirects (301) | HTTP only | The domain `viewmyart.me` allows a free ACM certificate. TLS ends at the ALB, traffic stays HTTP inside the VPC. Details: [HTTPS and custom domain](#https-and-custom-domain) |
+| DNS and certificate | Route 53 hosted zone + ACM certificate created **once by hand** (CLI), only *looked up* by Terraform | Create them in Terraform | They must survive every `destroy` (the certificate needs DNS validation and the registrar keeps the zone name servers). Neither Route 53 nor ACM is in the cahier §4.1 list: they are documented additions |
 | ASG health check | `ELB` type, 300 s grace period | `EC2` type | An instance the ALB sees as unhealthy is replaced, not only one that is powered off |
 | Instance metadata | IMDSv2 required, hop limit 2 | IMDSv1 | Security hardening. Hop limit 2 lets the AWS SDK work if a container is ever used |
 | Deregistration delay | 30 s | 300 s default | Faster demos and faster destroy |
 
-## What is deployed (51-resource baseline)
+## HTTPS and custom domain
 
-The applied v2 baseline has 51 resources, including the CloudWatch log groups, the scaling policy and the alarms. Full list: `terraform state list`.
+The site is served at `https://gallery.viewmyart.me` when `enable_https = true` (default `false`: HTTP only, same as before). Port 80 answers with a permanent redirect (301) to the HTTPS address. TLS ends at the ALB, and the traffic between the ALB and the instances stays HTTP inside the VPC.
+
+### One-time setup (outside Terraform)
+
+The hosted zone and the certificate are created **once** by hand and kept between sessions. Terraform only *looks them up*, so `./destroy.sh` never deletes them and a rebuild needs no new certificate.
+
+```bash
+# 1. Public hosted zone. Note the four name servers it returns.
+aws route53 create-hosted-zone --name viewmyart.me --caller-reference "$(date +%s)"
+
+# 2. At the registrar (Namecheap): Nameservers -> Custom DNS -> the four name servers of the zone. Save.
+#    Check (it can take from minutes to hours): dig +short NS viewmyart.me
+
+# 3. Certificate for the application hostname. It must be in us-east-1 (same region as the ALB).
+aws acm request-certificate --region us-east-1 \
+  --domain-name gallery.viewmyart.me --validation-method DNS
+
+# 4. Create the validation CNAME that ACM asks for, in the zone.
+read NAME VALUE < <(aws acm describe-certificate --region us-east-1 --certificate-arn <CERTIFICATE_ARN> \
+  --query 'Certificate.DomainValidationOptions[0].ResourceRecord.[Name,Value]' --output text)
+aws route53 change-resource-record-sets --hosted-zone-id <ZONE_ID> --change-batch \
+  "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"$NAME\",\"Type\":\"CNAME\",\"TTL\":300,\"ResourceRecords\":[{\"Value\":\"$VALUE\"}]}}]}"
+
+# 5. Wait for ISSUED (it validates by itself once the name servers are live).
+aws acm describe-certificate --region us-east-1 --certificate-arn <CERTIFICATE_ARN> \
+  --query 'Certificate.Status' --output text
+```
+
+Never put the certificate ARN or the zone ID in a screenshot without blurring the account ID.
+
+### Turn it on
+
+Add to `terraform.tfvars` (it is not committed):
+
+```
+enable_https = true
+```
+
+Optional variables: `domain_name` (default `viewmyart.me`) and `app_subdomain` (default `gallery`).
+
+With `enable_https = true`, Terraform:
+
+- looks up the Route 53 zone and the **ISSUED** certificate (`plan` fails if the certificate is not issued, so nothing half-built is created),
+- adds the HTTPS listener on :443 (policy `ELBSecurityPolicy-TLS13-1-2-2021-06`) and turns the :80 listener into a 301 redirect,
+- creates the alias record `gallery.viewmyart.me` to the ALB, destroyed with the stack,
+- gives the backend `https://gallery.viewmyart.me` as `FRONTEND_URL` and `PUBLIC_API_URL`.
+
+Without the variable, the plan is unchanged: the only new resources with it on are the HTTPS listener and the alias record (52 become 54).
+
+### Verify
+
+```bash
+curl -sI http://gallery.viewmyart.me | head -3            # expected: 301 Moved Permanently
+curl -s https://gallery.viewmyart.me/api/health            # expected: the health JSON
+curl -sI https://gallery.viewmyart.me | head -3            # expected: HTTP/2 200
+```
+
+Result on 15 Nov 2026: the HTTP request is redirected with a 301 by the ALB, HTTPS answers `HTTP/2 200` and the health endpoint is healthy. `terraform apply` created 54 resources in 14 min 17 s.
+
+> **[ADD SCREENSHOT]** `v2-13-https.png`: browser padlock on `gallery.viewmyart.me` and the `curl` redirect
+
+![HTTPS with the custom domain](images/screenshots/v2-13-https.png)
+
+### After the project
+
+`./destroy.sh` keeps the zone and the certificate. When the course is over, remove them (the zone costs about 0.50 USD per month, the certificate is free): delete the validation record and the other records in the zone, then `aws route53 delete-hosted-zone --id <ZONE_ID>` and `aws acm delete-certificate --region us-east-1 --certificate-arn <CERTIFICATE_ARN>`.
+
+## What is deployed (52-resource baseline)
+
+The applied v2 baseline has 52 resources, including the CloudWatch log groups, the scaling policy and the alarms. With `enable_https = true` there are 2 more (the HTTPS listener and the Route 53 alias record), so 54. Full list: `terraform state list`.
 
 | Area | Resources | Module |
 |---|---|---|
@@ -188,11 +260,11 @@ The applied v2 baseline has 51 resources, including the CloudWatch log groups, t
 | Security | 4 security groups (rules defined in the module) | `security` |
 | Bastion | 1 `t3.micro` in public subnet 1 | `compute` |
 | Secrets | 3 random values + 3 SSM SecureString parameters (`/art-gallery/db-password`, `jwt-secret`, `admin-password`) | `secrets` |
-| Load balancer | ALB, target group (`/api/health`, 15 s), HTTP :80 listener | `alb` |
+| Load balancer | ALB, target group (`/api/health`, 15 s), HTTP :80 listener (forward, or 301 redirect when HTTPS is on). With `enable_https`: HTTPS :443 listener and a Route 53 alias record for `gallery.viewmyart.me` | `alb` / root |
 | Database | RDS PostgreSQL instance + parameter group | `rds` |
 | Application | Launch Template, Auto Scaling Group (min 2, max 3, one instance per AZ) | `asg` |
 | Monitoring | Operations dashboard, ALB and RDS metrics, 4 log groups, three alarms (unhealthy hosts, target 5xx, RDS CPU), SNS e-mail notifications (confirm the subscription e-mail after each apply) | `monitoring` |
-| Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023) | root / `asg` |
+| Read-only lookups | Data bucket, availability zones, AMI (latest Amazon Linux 2023). With `enable_https`: the Route 53 zone and the ISSUED ACM certificate | root / `asg` |
 
 ### ASG CPU target tracking
 - The ASG scales its capacity to keep average CPU utilization near the target.
@@ -227,7 +299,7 @@ infra/
     |-- security/               4 security groups
     |-- compute/                bastion
     |-- secrets/                DB password, JWT secret, admin password (SSM)
-    |-- alb/                    load balancer, target group, listener
+    |-- alb/                    load balancer, target group, HTTP listener (+ optional HTTPS listener)
     |-- rds/                    PostgreSQL in the private DB subnets
     |-- monitoring/             CloudWatch dashboard and alarms for ALB and RDS
     `-- asg/                    launch template (+ boot script) and Auto Scaling Group
@@ -327,6 +399,8 @@ terraform plan -var="admin_cidr=${ADMIN_IP}/32"
 ```
 
 Each variable name must appear **once** in `terraform.tfvars` (a duplicate keeps the last value and is easy to miss).
+
+To serve the site over HTTPS on your domain, add `enable_https = true` (after the one-time setup in [HTTPS and custom domain](#https-and-custom-domain)). Without it the stack is HTTP only, as before.
 
 *Screenshot: [admin IP and tfvars](EVIDENCE.md#2-configure)*
 
@@ -430,15 +504,19 @@ Taken from the `terraform apply` log. Resources are created in parallel, so the 
 
 The ASG depends on the RDS endpoint (the boot script needs the DB host), which is why it cannot start earlier.
 
+### Measured: full rebuild in real mode with HTTPS (54 resources)
+
+`time ./apply.sh` after a full destroy, on 15 Nov 2026: **14 min 17 s** (real mode, artifacts and seed from S3, HTTPS on). This includes the precheck and the local state backup done by `apply.sh`. The margin to the 15-minute target (L1) is 43 seconds, so RDS creation speed decides the result: measure again during the demonstration.
+
 ### Measurements to complete
 
 | Measurement | Command | Result |
 |---|---|---|
-| Full apply, real mode (artifacts in S3) | `time terraform apply -auto-approve` | ___ min ___ s |
+| Full apply, real mode (artifacts in S3, HTTPS on) | `time ./apply.sh` | 14 min 17 s |
 | Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s |
 | Replacement of a killed instance (until `healthy`) | see [T7](#t7-resilience-kill-one-instance) | ___ min |
 | Rolling update to `v2` | see [T8](#t8-new-version-without-total-interruption) | ___ min |
-| Rebuild target (L1) | 15 minutes or less | Met in fallback mode (11.5 min). Real mode: ___ |
+| Rebuild target (L1) | 15 minutes or less | Met: 14 min 17 s in real mode (11.5 min in fallback mode) |
 
 > **[ADD SCREENSHOT]** `v2-08-timing.png`: timing of apply and destroy
 
@@ -462,6 +540,8 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 | RDS storage gp3, 20 GB | 20 GB | about 0.115 USD/GB-month | 0.003 |
 | VPC, subnets, route tables, security groups, S3 gateway endpoint, SSM standard parameters | | free | 0 |
 | **Total** | | | **about 0.15 USD/h** |
+
+> Not in the hourly total: the Route 53 hosted zone (about 0.50 USD per month, kept between sessions). The ACM public certificate and the ALB HTTPS listener add no hourly cost.
 
 ### What it means for the budget (50 USD)
 
@@ -515,8 +595,8 @@ STATE=art-gallery-tfstate-$SUFFIX
 
 ```bash
 aws sts get-caller-identity --query '[Arn]' --output text      # blur the account ID
-terraform state list | wc -l                                    # expected: 55 (51 resources + 4 data sources), check against your own run
-terraform state list | grep -vE '(^|\.)data\.' | wc -l          # expected: 51 (resources only), check against your own run
+terraform state list | wc -l                                    # expected: 56 (52 resources + 4 data sources); 60 with HTTPS (54 + 6)
+terraform state list | grep -vE '(^|\.)data\.' | wc -l          # expected: 52 (resources only); 54 with HTTPS
 terraform output
 ```
 
@@ -904,7 +984,7 @@ time terraform apply -auto-approve
 curl -s "$(terraform output -raw health_url)"; echo
 ```
 
-Expected: 15 minutes or less and a healthy application. Result: ___ min ___ s.
+Expected: 15 minutes or less and a healthy application. Result: **14 min 17 s** (15 Nov 2026, real mode, HTTPS on, `./apply.sh`).
 
 *Screenshot: [T10 rebuild time](EVIDENCE.md#t10-rebuild-from-zero-timed)*
 
@@ -976,7 +1056,7 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 |---|---|---|
 | Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: T7 |
 | Load | 50 concurrent users (100 peak) | k6 test planned (T11) |
-| Rebuild time | 15 minutes or less | **11.5 min measured** in fallback mode. Real mode: ___ |
+| Rebuild time | 15 minutes or less | **14 min 17 s measured** in real mode with HTTPS (11.5 min in fallback mode). Margin: 43 s |
 | Max data loss | 5 minutes or less | RDS automated backups (7 days) with point-in-time recovery enabled. Restore demonstration: T9 |
 | Budget | 50 USD or less | About 0.15 USD/h, destroy after every session, single NAT, `t3.micro` |
 
@@ -1006,7 +1086,9 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 - [x] CloudWatch dashboard and metric alarms deployed
 - [x] SNS e-mail notifications configured and tested (an alarm e-mail was received)
 - [x] CloudWatch log shipping (4 log groups, one stream per instance)
-- [ ] k6 load test and real-mode rebuild timing
+- [x] Real-mode rebuild timing: 14 min 17 s (`./apply.sh`, 54 resources with HTTPS)
+- [x] HTTPS on `gallery.viewmyart.me` (ACM certificate, Route 53 alias, HTTP to HTTPS redirect), verified with `curl`
+- [ ] k6 load test (T11)
 - [ ] boto3 scripts (RDS snapshot and restore, resilience test, cost report)
 - [ ] Optional: ECR registry in `bootstrap/` as an upgrade of the deployment method
 
@@ -1019,12 +1101,13 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 | Uploaded artwork images | Stored in S3 and kept after a destroy, but an image shows only if an artwork row points to it (rows come back as of the seed) | Save the live database as the new seed before destroying ([RDS.md](RDS.md#3-keep-the-data-created-on-aws-before-a-destroy)) |
 | TLS to PostgreSQL | `db_force_ssl = false` (RDS PostgreSQL 15+ forces TLS by default) | Traffic stays in the private VPC. Set `true` once the API connects with TLS (`DB_SSL`, see the [backend](../backend/README.md#configuration)) |
 | Secrets in state | Generated values are also in the Terraform state | Keep the state in the private, encrypted, versioned bucket |
-| HTTPS | HTTP only | Needs a domain + ACM certificate, or CloudFront in front |
+| HTTPS | HTTPS on `gallery.viewmyart.me` with `enable_https = true`, HTTP only otherwise. TLS ends at the ALB: ALB to instance traffic is HTTP inside the VPC | Route 53 zone and ACM certificate are created once by hand and are not managed by Terraform. End-to-end TLS would need a certificate on the instances |
+| Hosted zone and certificate persist | `./destroy.sh` keeps the Route 53 zone and the ACM certificate (only the alias record is destroyed with the stack). The zone costs about 0.50 USD per month, the public certificate is free | Delete both at the end of the course (see [HTTPS](#https-and-custom-domain)) |
 | ASG CPU target tracking | Scale-in is intentionally slow by design; AWS creates the policy's CloudWatch alarms and deletes them automatically with the policy | Expected behavior; observe it during the T11 load test |
 | CloudWatch Logs delivery | If `LabInstanceProfile` cannot write to CloudWatch Logs, the groups stay empty | Agent setup is non-fatal; the app still runs |
 | Remote state | The state is stored in the private S3 state bucket with locking (`versions.tf`, `backend.hcl`). A local copy goes to `state-backups/` after each apply and is removed after a successful destroy | A crashed Terraform run can leave a stale lock: check that no other run is active, then `terraform force-unlock <ID>` |
 | Instance refresh | The lab SCP denies `autoscaling:StartInstanceRefresh`, so `enable_instance_refresh` is `false` | Replace instances by hand (T8) |
-| CloudFront | Not available in the lab account: all traffic goes through the ALB | Matches the HTTP-only row above |
+| CloudFront | Not available in the lab account: all traffic goes through the ALB | HTTPS is done at the ALB instead |
 | Leftover check | `destroy.sh` only fails for resources tagged `Project=art-gallery` (ALB, RDS and RDS snapshots by name prefix). Other resources in the account are listed as ignored and never touched | An untagged resource leaked by this project would not make the check fail |
 | `npm ci` at boot | Depends on the npm registry through the NAT | Bundle `node_modules` in the artifact if it becomes a problem |
 
@@ -1063,6 +1146,10 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 | `502 Bad Gateway` right after replacing instances | The new instances are still booting (3 to 5 minutes). Check target health, see T7 |
 | `AccessDenied` when opening an S3 object URL in the browser | Expected: the bucket is private. Open `http://<app_url>/api/uploads/<file>` instead ([S3.md](S3.md#6-common-problems)) |
 | Uploaded images land on the instance disk, not in S3 | The site runs the old backend: rebuild and upload `backend-<version>.tar.gz` with `@aws-sdk/client-s3` installed, then apply |
+| `plan` fails with `no matching ACM Certificate found` | The certificate is not `ISSUED` yet, was requested in another region (it must be `us-east-1`), or is not for `<app_subdomain>.<domain_name>`. Check with `aws acm describe-certificate --region us-east-1 --certificate-arn <ARN> --query Certificate.Status` |
+| ACM stays `PENDING_VALIDATION` | The name servers at the registrar do not point to the Route 53 zone yet (`dig +short NS viewmyart.me` must list the four `awsdns` servers), or the validation CNAME is missing from the zone |
+| `gallery.viewmyart.me` does not resolve right after `apply` | The alias record needs a minute or two. Check `dig +short gallery.viewmyart.me` |
+| Site loads over HTTPS but shows no artworks | Mixed content (an absolute `http://` API URL built into the frontend): read the browser console |
 | Old ECR repositories show up | Leftovers from earlier tests: `aws ecr delete-repository --repository-name <name> --force` |
 
 ## Appendix: L3 baseline (29 resources)
