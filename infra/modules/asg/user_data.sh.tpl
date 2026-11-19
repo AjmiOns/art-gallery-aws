@@ -224,6 +224,13 @@ http {
   sendfile on;
   client_max_body_size 10m;
 
+  # The ALB ends TLS and sets X-Forwarded-Proto (http or https). Keep it for the API;
+  # fall back to $scheme only when a request reaches nginx without the header.
+  map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+  }
+
   server {
     listen 80 default_server;
     server_name _;
@@ -234,7 +241,7 @@ http {
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
     }
 
     location / {
