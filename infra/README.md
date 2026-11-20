@@ -19,7 +19,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 - Deliverables covered here: **L3** (network, security, outbound access, destroy script) and **L4/L5** (ALB, Auto Scaling Group, RDS, secrets, artifact deployment). Architecture v2 has been **applied end to end**: 52 resources (network, ALB, Auto Scaling Group with a CPU scaling policy, RDS, secrets, CloudWatch log groups and alarms), 54 with HTTPS. The real application answers behind the load balancer, and over HTTPS at `https://gallery.viewmyart.me` when `enable_https = true` ([HTTPS and custom domain](#https-and-custom-domain)).
 - **The database data is restored automatically** at the first boot of a new stack, from a dump kept in the persistent data bucket (`seed/gallery.sql`). `terraform apply` is the only command needed to get the application back with its data. Details, queries and commands: [RDS.md](RDS.md).
 - **Images uploaded from a computer go to S3 automatically** (`artworks/uploads/` in the persistent data bucket) and are served by the API. What lives in the buckets, the commands and the cost: [S3.md](S3.md).
-- Still to do (see [Roadmap](#roadmap-future-work)): resilience demo evidence, rolling update demo, snapshot restore demo, k6 load test. CloudWatch log shipping is done: every instance sends its boot, nginx and application logs to the four `/art-gallery/*` log groups.
+- Still to do (see [Roadmap](#roadmap-future-work)): rolling update demo, snapshot restore demo, k6 load test. CloudWatch log shipping is done: every instance sends its boot, nginx and application logs to the four `/art-gallery/*` log groups.
 
 > **Evidence.** This README keeps only the key screenshots. Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md), grouped under the same headings.
 
@@ -514,7 +514,7 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 |---|---|---|
 | Full apply, real mode (artifacts in S3, HTTPS on) | `time ./apply.sh` | 14 min 17 s |
 | Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s |
-| Replacement of a killed instance (until `healthy`) | see [T7](#t7-resilience-kill-one-instance) | ___ min |
+| Replacement of a killed instance (until `healthy`) | see [T7](docs/test.md) | approximately 53 s (`20:58:14` to `20:59:07`) |
 | Rolling update to `v2` | see [T8](#t8-new-version-without-total-interruption) | ___ min |
 | Rebuild target (L1) | 15 minutes or less | Met: 14 min 17 s in real mode (11.5 min in fallback mode) |
 
@@ -800,7 +800,7 @@ Each test: what it proves, the commands, the expected result, a screenshot. Run 
 | T4 | Database reachable only from the app tier | Network isolation | to capture |
 | T5 | Private instances not reachable from the Internet | Security groups, no public IP | to capture |
 | T6 | Outbound goes through the NAT | NAT route works | done in L3, repeat on v2 |
-| T7 | Resilience: kill one instance | Fault tolerance (graded) | to do |
+| T7 | Resilience: kill one instance | Fault tolerance (graded) | PASS — [full procedure and screenshots](docs/test.md) |
 | T8 | New version without total interruption | Rolling update | to do |
 | T9 | Backup and restore | Data protection (graded) | to do |
 | T10 | Rebuild from zero, timed | Rebuild target | partly done (11.5 min fallback) |
@@ -901,6 +901,8 @@ Expected: the **same public IP as the NAT Gateway** in V4, not an address of the
 *Screenshot: [T6 NAT outbound IP](EVIDENCE.md#t6-outbound-access-goes-through-the-nat-gateway)*
 
 ### T7. Resilience: kill one instance
+
+**Full test procedure and screenshots:** [T7 - Instance Loss and Automatic Replacement](docs/test.md)
 
 Terminal 1, a check every 2 seconds:
 
@@ -1054,7 +1056,7 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 
 | Objective | Target | Status |
 |---|---|---|
-| Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: T7 |
+| Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: [T7](docs/test.md) |
 | Load | 50 concurrent users (100 peak) | k6 test planned (T11) |
 | Rebuild time | 15 minutes or less | **14 min 17 s measured** in real mode with HTTPS (11.5 min in fallback mode). Margin: 43 s |
 | Max data loss | 5 minutes or less | RDS automated backups (7 days) with point-in-time recovery enabled. Restore demonstration: T9 |
@@ -1079,7 +1081,7 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 - [x] Uploaded images stored in S3 (`artworks/uploads/`), served by the API
 - [x] Real-mode deployment verified: site, API and restored data behind the ALB
 - [ ] One-command rebuild script (`rebuild.sh`: bootstrap, apply, health check)
-- [ ] Resilience demo evidence (T7)
+- [x] Resilience demo evidence ([T7](docs/test.md))
 - [ ] Rolling update demo (T8)
 - [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
 - [x] S3 remote state with bucket versioning, native locking and local backups
