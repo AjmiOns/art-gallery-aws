@@ -11,5 +11,5 @@ fi
 
 echo "Using $admin_ip/32 for bastion SSH access."
 ./scripts/precheck.sh
-terraform apply -var="admin_cidr=${admin_ip}/32" "$@"
+time terraform apply -var="admin_cidr=${admin_ip}/32" "$@"
 ./scripts/backup-state.sh
