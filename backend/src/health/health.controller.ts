@@ -9,6 +9,6 @@ export class HealthController {
   @Get()
   async check() {
     await this.dataSource.query('SELECT 1');
-    return { status: 'ok' };
+    return { status: 'ok', version: 'v2' };
   }
 }
