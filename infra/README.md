@@ -71,7 +71,7 @@ Infrastructure as Code for the **Online Art Gallery** project ([project overview
 
 Editable source: `images/architecture-v2.1.drawio` (draw.io).
 
-![Architecture version 2](images/architecture-v3.drawio%20(1).png)
+![Architecture version 2](images/architecture-v3.jpg)
 
 ```
 Customers -> Internet Gateway -> ALB :80 (public subnets 1+2, health check /api/health)
@@ -514,7 +514,7 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 |---|---|---|
 | Full apply, real mode (artifacts in S3, HTTPS on) | `time ./apply.sh` | 14 min 17 s |
 | Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s |
-| Replacement of a killed instance (until `healthy`) | see [T7](docs/test.md) | approximately 53 s (`20:58:14` to `20:59:07`) |
+| Replacement of a killed instance (until `healthy`) | see [T7](docs/t7.md) | approximately 53 s (`20:58:14` to `20:59:07`) |
 | Rolling update to `v2` | see [T8](#t8-new-version-without-total-interruption) | ___ min |
 | Rebuild target (L1) | 15 minutes or less | Met: 14 min 17 s in real mode (11.5 min in fallback mode) |
 
@@ -794,188 +794,19 @@ Each test: what it proves, the commands, the expected result, a screenshot. Run 
 
 | # | Test | Proves | Status |
 |---|---|---|---|
-| T1 | Health endpoint | ALB, target group, API alive | to capture |
-| T2 | Frontend and DB-backed API through the single URL | nginx serves the pages and proxies `/api`, DB reachable | done (200 and `[]`), screenshot to add |
-| T3 | Instances booted in real mode, secrets read | Artifacts, SSM access, no fallback | to capture |
-| T4 | Database reachable only from the app tier | Network isolation | to capture |
-| T5 | Private instances not reachable from the Internet | Security groups, no public IP | to capture |
-| T6 | Outbound goes through the NAT | NAT route works | done in L3, repeat on v2 |
-| T7 | Resilience: kill one instance | Fault tolerance (graded) | PASS — [full procedure and screenshots](docs/test.md) |
-| T8 | New version without total interruption | Rolling update | to do |
-| T9 | Backup and restore | Data protection (graded) | to do |
+| T1 | Health endpoint | ALB, target group, API alive | PASS — [full procedure and screenshots](docs/t1-t3.md) |
+| T2 | Frontend and DB-backed API through the single URL | nginx serves the pages and proxies `/api`, DB reachable | PASS — [full procedure and screenshots](docs/t1-t3.md) |
+| T3 | Instances booted in real mode, secrets read | Artifacts, SSM access, no fallback | PASS — [full procedure and screenshots](docs/t1-t3.md) |
+| T4 | Database reachable only from the app tier | Network isolation | PASS — [full procedure and screenshots](docs/t4.md) |
+| T5 | Private instances not reachable from the Internet | Security groups, no public IP | PASS — [full procedure and screenshots](docs/t5.md) |
+| T6 | Outbound goes through the NAT | NAT route works | PASS — [full procedure and screenshots](docs/t6.md) |
+| T7 | Resilience: kill one instance | Fault tolerance (graded) | PASS — [full procedure and screenshots](docs/t7.md) |
+| T8 | New version without total interruption | Rolling update | PASS — [full procedure and screenshots](docs/t8.md) |
+| T9 | Backup and restore | Data protection (graded) | PASS — [full procedure and screenshots](docs/t9.md) |
 | T10 | Rebuild from zero, timed | Rebuild target | partly done (11.5 min fallback) |
 | T11 | Load test (k6) | 50 concurrent users, 100 peak | planned |
 | T12 | Sensitive data: password hashes and card data | Passwords stored as bcrypt hashes, no card number or security code stored | done, see [RDS.md](RDS.md#5-verification-passwords-and-cards) |
-| T13 | Alarms: trigger each one | Monitoring and notifications | to do, see [T13](#t13-alarms-trigger-each-one) |
-
-### T1. Health endpoint
-
-```bash
-URL=$(terraform output -raw app_url)
-curl -s "$(terraform output -raw health_url)"; echo
-```
-
-Expected: JSON with a healthy status (`fallback` means the artifacts were not found, see T3).
-
-*Screenshot: [T1 health](EVIDENCE.md#t1-health-endpoint)*
-
-### T2. Frontend and API through the one URL
-
-```bash
-curl -s -o /dev/null -w "frontend: %{http_code}\n" "$URL/"
-curl -s "$URL/api/artworks" | head -c 300; echo
-```
-
-Expected: `frontend: 200`, and a JSON answer from a route that reads the database (`/api/artworks` here, defined by the [backend](../backend/README.md)): it proves the path ALB, instance, RDS works. An empty list is fine on a new database. A `500` means the API cannot reach the database.
-
-*Screenshot: [T2 frontend and API](EVIDENCE.md#t2-frontend-and-api-through-the-one-url)*
-
-### T3. Real mode and secrets
-
-```bash
-eval "$(ssh-agent -s)"; ssh-add ~/path/to/labsuser.pem
-eval "$(terraform output -raw list_app_instances)"          # private IPs
-ssh -J ec2-user@$(terraform output -raw bastion_public_ip) ec2-user@<private-ip>
-```
-
-On the instance:
-
-```bash
-sudo grep -E "=== mode:|rror|enied" /var/log/art-gallery-boot.log
-systemctl is-active art-gallery nginx
-```
-
-Expected: `=== mode: real`, **no** `AccessDenied`, both services `active`.
-
-*Screenshot: [T3 boot log](EVIDENCE.md#t3-real-mode-and-secrets)*
-
-### T4. Database reachable from the app tier only
-
-On your **laptop**, get the host name (the output ends with `:5432`, which is cut off here):
-
-```bash
-terraform output -raw rds_endpoint | cut -d: -f1
-```
-
-Copy the result, then on an **app instance** (inside the SSH session above) paste it into a variable and test. Do not type the `<` `>` signs: bash would read them as redirections.
-
-```bash
-DB=art-gallery-db.xxxxxxxx.us-east-1.rds.amazonaws.com      # your real value
-timeout 3 bash -c "</dev/tcp/$DB/5432" && echo "DB port open" || echo "blocked"
-```
-
-On the **bastion** (a different security group, so it must fail), set `DB` the same way and run the same test:
-
-```bash
-ssh ec2-user@$(terraform output -raw bastion_public_ip)
-timeout 3 bash -c "</dev/tcp/$DB/5432" && echo "DB port open" || echo "blocked (expected)"
-```
-
-Expected: `DB port open` from the app instance, `blocked (expected)` from the bastion. Together with `Public: false` in V10, this shows the database is not exposed.
-
-![T4 database access](images/screenshots/v2-26-t4-db-isolation.png)
-
-### T5. Private instances are not reachable from the Internet
-
-```bash
-# App instances have no public IP (V7 shows the empty column). From your laptop, the private IP must time out:
-curl -m 5 http://<app-private-ip>/ ; echo "exit code: $?"      # expected: timeout, exit code 28
-# Direct SSH to an app instance without the bastion must fail:
-ssh -o ConnectTimeout=5 ec2-user@<app-private-ip>               # expected: timeout
-# On an app instance, IMDSv1 must be refused (IMDSv2 required):
-curl -s -o /dev/null -w "%{http_code}\n" http://169.254.169.254/latest/meta-data/    # expected: 401
-```
-
-*Screenshot: [T5 no direct access](EVIDENCE.md#t5-private-instances-are-not-reachable-from-the-internet)*
-
-### T6. Outbound access goes through the NAT Gateway
-
-From an app instance:
-
-```bash
-curl -s https://ifconfig.me; echo
-```
-
-Expected: the **same public IP as the NAT Gateway** in V4, not an address of the instance.
-
-*Screenshot: [T6 NAT outbound IP](EVIDENCE.md#t6-outbound-access-goes-through-the-nat-gateway)*
-
-### T7. Resilience: kill one instance
-
-**Full test procedure and screenshots:** [T7 - Instance Loss and Automatic Replacement](docs/test.md)
-
-Terminal 1, a check every 2 seconds:
-
-```bash
-cd ~/projet/art-gallery-aws/infra
-while true; do echo "$(date +%T) $(curl -s -o /dev/null -w '%{http_code}' "$(terraform output -raw health_url)")"; sleep 2; done
-```
-
-Terminal 2:
-
-```bash
-eval "$(terraform output -raw list_app_instances)"            # note an instance id
-aws ec2 terminate-instances --instance-ids <id>
-
-aws autoscaling describe-scaling-activities --auto-scaling-group-name art-gallery-asg --max-items 3 \
-  --query 'Activities[].[StartTime,StatusCode,Description]' --output table
-
-TG=$(aws elbv2 describe-target-groups --names art-gallery-tg --query 'TargetGroups[0].TargetGroupArn' --output text)
-aws elbv2 describe-target-health --target-group-arn $TG \
-  --query 'TargetHealthDescriptions[].[Target.Id,TargetHealth.State]' --output table
-```
-
-Expected: the loop keeps printing `200` (an occasional non-200 for a few seconds is normal while the ALB notices the dead target, note it), the ASG launches a replacement within minutes, and target health returns to 2 `healthy`. Record the time until the replacement is `healthy`: ___ min.
-
-> **[ADD SCREENSHOT]** `v2-29-t7-loop.png`: T7 loop
-
-![T7 loop](images/screenshots/v2-29-t7-loop.png)
-
-*Screenshot: [T7 scaling activities](EVIDENCE.md#t7-resilience-kill-one-instance)*
-
-> **[ADD SCREENSHOT]** `v2-31-t7-targets.png`: T7 target health
-
-![T7 target health](images/screenshots/v2-31-t7-targets.png)
-
-### T8. New version without total interruption
-
-```bash
-# upload backend-v2 / frontend-v2 (same commands as above, v2 in the file names), then:
-terraform apply -var app_version=v2     # new launch template version; running instances are NOT replaced
-```
-
-The lab denies `autoscaling:StartInstanceRefresh`, so `enable_instance_refresh` stays `false` and the replacement is done by hand, one instance at a time:
-
-```bash
-# 1. which launch template version does each instance run? (the old ones show the previous number)
-aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names art-gallery-asg \
-  --query 'AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState,LaunchTemplate.Version]' --output text
-# 2. terminate ONE old instance: the ASG launches a replacement from the new version
-aws ec2 terminate-instances --instance-ids <OLD_INSTANCE_ID>
-# 3. wait until the target group shows 2 healthy targets again, then repeat step 2 for the other old instance
-aws elbv2 describe-target-health --target-group-arn <TARGET_GROUP_ARN> \
-  --query 'TargetHealthDescriptions[].[Target.Id,TargetHealth.State]' --output text
-```
-
-While it runs, keep the loop from T7 open. Expected: the answers stay `200` because the other instance keeps serving. Record the time until each replacement is `healthy`. Rollback is `terraform apply -var app_version=v1` followed by the same manual replacement.
-
-*Screenshot: [T8 rolling update](EVIDENCE.md#t8-new-version-without-total-interruption)*
-
-### T9. Backup and restore
-
-```bash
-aws rds create-db-snapshot --db-instance-identifier art-gallery-db --db-snapshot-identifier art-gallery-manual-1
-aws rds wait db-snapshot-available --db-snapshot-identifier art-gallery-manual-1
-./destroy.sh
-terraform apply -var db_snapshot_identifier=art-gallery-manual-1
-curl -s "$(terraform output -raw app_url)/api/artworks" | head -c 300; echo      # the data is back
-```
-
-Also show that automated backups and point-in-time recovery are on: `aws rds describe-db-instances --db-instance-identifier art-gallery-db --query 'DBInstances[0].[BackupRetentionPeriod,LatestRestorableTime]'`.
-
-> **[ADD SCREENSHOT]** `v2-33-t9-restore.png`: T9 snapshot and restore
-
-![T9 snapshot and restore](images/screenshots/v2-33-t9-restore.png)
+| T13 | Alarms: trigger each one | Monitoring and notifications | PASS — [full procedure and screenshots](docs/t13.md) |
 
 ### T10. Rebuild from zero, timed
 
@@ -1014,49 +845,11 @@ Result: **22 users, 22 bcrypt hashes** (cost 10, 60 characters), and **0 suspect
 
 ![payments hold only brand and last 4 digits](images/screenshots/v2-t12-4-payments-table.png)
 
-### T13. Alarms: trigger each one
-
-Three alarms send an e-mail through the SNS topic `art-gallery-alarm-notifications`. After every apply AWS sends a new confirmation e-mail to the address in `alarm_email`: click its link, or no notification arrives.
-
-| Alarm | Metric and rule | How to trigger it |
-|---|---|---|
-| `art-gallery-alb-unhealthy-hosts` | `UnHealthyHostCount` above 0 for 2 consecutive minutes | Stop the API on one instance (commands below). Back to OK when the instance is restarted or replaced |
-| `art-gallery-alb-target-5xx` | `HTTPCode_Target_5XX_Count`, sum of `alb_5xx_alarm_threshold` (default 5) or more in 1 minute | Stop the API on one instance, then send requests: nginx answers 502 until the ALB marks the target unhealthy |
-| `art-gallery-rds-high-cpu` | RDS CPU average above 80% for 2 periods of 5 minutes | Not practical on a `db.t3.micro` in a demo. Show it in state OK, or test the e-mail path with `aws cloudwatch set-alarm-state` if the lab allows it |
-
-The scaling policy also owns CloudWatch alarms created and deleted by AWS (see [ASG CPU target tracking](#asg-cpu-target-tracking)).
-
-```bash
-cd infra
-KEY=labsuser.pem
-BASTION=$(terraform output -raw bastion_public_ip)
-URL=$(terraform output -raw app_url)
-eval "$(terraform output -raw list_app_instances)"          # shows the private IPs of the instances
-IP=<private IP of ONE instance>
-onhost() { ssh -i $KEY -o StrictHostKeyChecking=accept-new \
-  -o ProxyCommand="ssh -i $KEY -o StrictHostKeyChecking=accept-new -W %h:%p ec2-user@$BASTION" ec2-user@$IP "$1"; }
-
-# 1. stop the API (nginx stays up and answers 502 for /api/)
-onhost 'sudo systemctl stop art-gallery'
-
-# 2. send requests for about 90 seconds and count the status codes
-for i in $(seq 1 300); do curl -s -o /dev/null -w '%{http_code}\n' "$URL/api/health"; sleep 0.3; done | sort | uniq -c
-
-# 3. keep the API stopped for at least 3 minutes, then read the alarm states
-aws cloudwatch describe-alarms --region us-east-1 --alarm-name-prefix art-gallery \
-  --query 'MetricAlarms[].[AlarmName,StateValue]' --output text
-
-# 4. recover (or wait for the ASG to replace the unhealthy instance)
-onhost 'sudo systemctl start art-gallery'
-```
-
-Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or so (3 failed health checks of 15 s), then only `200`, because the other instance keeps serving. The 5xx alarm should go to `ALARM` within a minute or two and the unhealthy-hosts alarm after two consecutive minutes; each sends an e-mail, and each returns to `OK` after recovery. This procedure has not been run yet: record the real counts and the time from the stop to the e-mail, and take a screenshot of the alarm status widget on the dashboard.
-
 ## Non-functional objectives
 
 | Objective | Target | Status |
 |---|---|---|
-| Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: [T7](docs/test.md) |
+| Instance loss tolerance | No downtime if one app instance stops | 2 AZs, ALB, ASG with ELB health check built. Demonstration: [T7](docs/t7.md) |
 | Load | 50 concurrent users (100 peak) | k6 test planned (T11) |
 | Rebuild time | 15 minutes or less | **14 min 17 s measured** in real mode with HTTPS (11.5 min in fallback mode). Margin: 43 s |
 | Max data loss | 5 minutes or less | RDS automated backups (7 days) with point-in-time recovery enabled. Restore demonstration: T9 |
@@ -1081,8 +874,8 @@ Expected: the loop prints a mix of `200` and `502` for the first 45 seconds or s
 - [x] Uploaded images stored in S3 (`artworks/uploads/`), served by the API
 - [x] Real-mode deployment verified: site, API and restored data behind the ALB
 - [ ] One-command rebuild script (`rebuild.sh`: bootstrap, apply, health check)
-- [x] Resilience demo evidence ([T7](docs/test.md))
-- [ ] Rolling update demo (T8)
+- [x] Resilience demo evidence ([T7](docs/t7.md))
+- [x] Rolling update demo ([T8](docs/t8.md))
 - [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
 - [x] S3 remote state with bucket versioning, native locking and local backups
 - [x] CloudWatch dashboard and metric alarms deployed
