@@ -273,7 +273,7 @@ Vue globale. Le détail de chaque partie est dans son README.
 **Frontend** ([détail](frontend/README.md#feuille-de-route))
 - [x] Catalogue, espaces par rôle, paiement, messagerie, interface responsive
 - [x] Déploiement sur AWS : export statique servi par nginx derrière l'ALB
-- [ ] Messagerie en temps réel, pagination, tests
+- [x] Messagerie en temps réel, pagination, tests
 
 **Backend** ([détail](backend/README.md#feuille-de-route))
 - [x] Authentification JWT, trois rôles, œuvres, commandes, paiement (démonstration et Stripe test), messagerie, administration, seed
