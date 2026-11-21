@@ -12,6 +12,7 @@ resource "aws_lb" "this" {
   tags                       = { Name = "${var.name}-alb" }
 }
 
+
 # Targets are the nginx on each instance (port 80). nginx proxies /api to Node.
 resource "aws_lb_target_group" "app" {
   name                 = "${var.name}-tg"

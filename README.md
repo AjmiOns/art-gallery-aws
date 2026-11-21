@@ -8,8 +8,9 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-v3%20applied%20and%20verified-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-Learner%20Lab-FF9900?logo=amazonaws&logoColor=white)
+![HTTPS](https://img.shields.io/badge/HTTPS-ACM%20%2B%20Route%2053-2FA36B?logo=letsencrypt&logoColor=white)
 
-Plateforme web où les artistes publient leurs œuvres (peintures, décoration murale, art numérique, croquis) et où les acheteurs les découvrent, contactent l'artiste et les achètent avec un vrai parcours de paiement. L'application est déployée sur une infrastructure AWS 3 tiers haute disponibilité, entièrement décrite avec Terraform.
+Plateforme web où les artistes publient leurs œuvres (peintures, décoration murale, art numérique, croquis) et où les acheteurs les découvrent, contactent l'artiste et les achètent avec un vrai parcours de paiement. L'application est déployée sur une infrastructure AWS 3 tiers haute disponibilité, entièrement décrite avec Terraform, servie en HTTPS sur un nom de domaine et supervisée par CloudWatch.
 
 Le projet comporte trois parties. **Ce README donne la vue d'ensemble ; le détail de chaque partie est dans le README de son dossier.**
 
@@ -32,21 +33,21 @@ Le projet comporte trois parties. **Ce README donne la vue d'ensemble ; le déta
 |---|---|---|---|
 | **Rôle** | Interface web : catalogue, espaces acheteur, artiste et administrateur | API REST : authentification, œuvres, commandes, paiement, messagerie, administration | Réseau, sécurité, calcul, base de données, stockage S3 et secrets sur AWS |
 | **Technologies** | Next.js 15, React 19, TypeScript, CSS natif | NestJS 10, TypeORM, Passport JWT, Stripe, PostgreSQL 16 | Terraform, boto3, AWS Academy Learner Lab |
-| **Livrable** | Export statique (`frontend/out`) servi par nginx sur les instances, derrière l'ALB | API Node.js sur EC2 (Auto Scaling Group, 2 zones) derrière un ALB, base sur RDS, images sur S3 | Modules Terraform `network`, `security`, `compute`, `secrets`, `alb`, `rds`, `asg` (41 ressources) et `bootstrap.sh` (buckets S3) |
-| **État** | Fonctionnel en local et sur AWS | Fonctionnel en local et sur AWS | Architecture v3 déployée et vérifiée de bout en bout. Reste : CloudWatch, HTTPS, état Terraform distant, test de charge |
+| **Livrable** | Export statique (`frontend/out`) servi par nginx sur les instances, derrière l'ALB | API Node.js sur EC2 (Auto Scaling Group, 2 zones) derrière un ALB, base sur RDS, images sur S3 | Modules Terraform `network`, `security`, `compute`, `secrets`, `alb`, `rds`, `asg`, `monitoring` (52 ressources, 54 avec HTTPS) et `bootstrap.sh` (buckets S3) |
+| **État** | Fonctionnel en local et sur AWS | Fonctionnel en local et sur AWS | Architecture v3 déployée et vérifiée de bout en bout, avec HTTPS, état Terraform distant dans S3 et alarmes CloudWatch. Reste : test de charge k6, preuves de résilience et de mise à jour progressive, scripts boto3 |
 | **Documentation** | [`frontend/README.md`](frontend/README.md) | [`backend/README.md`](backend/README.md) | [`infra/README.md`](infra/README.md) |
 
 Où trouver quoi :
 
 - **Pages, captures d'écran, configuration de l'interface, build statique** : [frontend](frontend/README.md)
 - **Variables d'environnement, modules, règles métier, modèle de données, base de données, seed** : [backend](backend/README.md)
-- **VPC, groupes de sécurité, NAT, ALB, Auto Scaling Group, RDS, coûts, destruction, dépannage** : [infra](infra/README.md)
+- **VPC, groupes de sécurité, NAT, ALB, HTTPS et nom de domaine, Auto Scaling Group, RDS, CloudWatch, coûts, destruction, dépannage** : [infra](infra/README.md)
 - **Base RDS (copie de départ restaurée automatiquement, requêtes, sauvegarde)** : [infra/RDS.md](infra/RDS.md)
 - **Buckets S3 et images envoyées (commandes, coût)** : [infra/S3.md](infra/S3.md)
 
 ## Architecture globale
 
-Architecture telle que construite (v3). Elle est créée par `terraform apply` et détruite en fin de session par `./destroy.sh` ; seuls les deux buckets S3 persistent.
+Architecture telle que construite (v3). Elle est créée par `terraform apply` et détruite en fin de session par `./destroy.sh`. Seuls persistent les deux buckets S3, la zone Route 53 et le certificat ACM (créés une seule fois, hors Terraform).
 
 ```mermaid
 flowchart TB
@@ -55,7 +56,7 @@ flowchart TB
 
     subgraph AWS["AWS us-east-1, VPC 10.0.0.0/16, 2 zones de disponibilité"]
         subgraph PUB["Sous-réseaux publics"]
-            ALB["Application Load Balancer<br/>HTTP :80, santé /api/health"]
+            ALB["Application Load Balancer<br/>HTTPS :443 (certificat ACM)<br/>HTTP :80 redirigé en 301<br/>santé /api/health"]
             BAST["Bastion<br/>SSH uniquement"]
             NAT["NAT Gateway<br/>sortie seule (dnf, npm)"]
         end
@@ -66,14 +67,17 @@ flowchart TB
             RDS[("RDS PostgreSQL 16<br/>chiffrée, sauvegardes 7 jours")]
         end
         SSM["SSM Parameter Store<br/>3 secrets"]
-        subgraph PERS["Persistant (bootstrap.sh, jamais détruit)"]
-            S3[("S3 données<br/>artifacts/, seed/, artworks/uploads/")]
+        CW["CloudWatch<br/>logs, tableau de bord,<br/>3 alarmes et e-mails SNS"]
+        subgraph PERS["Persistant (créé une seule fois, jamais détruit)"]
+            S3[("2 buckets S3<br/>état Terraform, artifacts/, seed/,<br/>artworks/uploads/")]
+            DNS["Route 53 (zone) et ACM (certificat)<br/>gallery.votre-domaine"]
         end
     end
 
     STRIPE["Stripe"]
 
-    U -->|"HTTP :80"| ALB
+    U -->|"HTTPS :443"| ALB
+    DNS -.->|"enregistrement alias"| ALB
     ALB --> EC2
     ADM -->|"SSH 22"| BAST
     BAST -->|"SSH 22"| EC2
@@ -81,30 +85,35 @@ flowchart TB
     EC2 -->|"endpoint S3 gratuit"| S3
     EC2 -.->|"dnf, npm"| NAT
     EC2 -.->|"secrets au démarrage"| SSM
+    EC2 -.->|"logs"| CW
+    ALB -.->|"métriques"| CW
+    RDS -.->|"métriques"| CW
     EC2 --> STRIPE
 ```
 
 ![Architecture v3 détaillée](infra/images/architecture-v3.drawio%20(1).png)
 
-*Schéma détaillé : sous-réseaux, groupes de sécurité et flux. Source modifiable : `infra/images/` (draw.io). Les éléments estompés sont prévus ou facultatifs, non construits.*
+*Schéma détaillé : sous-réseaux, groupes de sécurité et flux. Source modifiable : `infra/images/` (draw.io). Il ne montre pas encore HTTPS, Route 53 ni CloudWatch, qui figurent dans le diagramme ci-dessus. Les éléments estompés sont prévus ou facultatifs, non construits.*
 
-- Le **frontend** est exporté en fichiers statiques (`frontend/out`), empaqueté dans S3, décompressé au démarrage de chaque instance et servi par **nginx**. Nginx relaie `/api` vers l'API de la même instance : le load balancer est la **seule origine** (pas de CORS, pas de contenu mixte).
+- Le **frontend** est exporté en fichiers statiques (`frontend/out`), empaqueté dans S3, décompressé au démarrage de chaque instance et servi par **nginx**. Nginx relaie `/api` vers l'API de la même instance : le load balancer est la **seule origine** (pas de CORS, pas de contenu mixte). Avec `enable_https = true`, le TLS est terminé au load balancer (certificat ACM) : le port 80 répond par une redirection permanente (301) vers HTTPS et le trafic reste en HTTP à l'intérieur du VPC.
 - Le **backend** tourne sur 2 instances EC2 privées, une par zone, dans un Auto Scaling Group (minimum 2) derrière l'Application Load Balancer. Si une instance tombe, le groupe la remplace. Chaque instance s'installe seule au démarrage à partir de paquets versionnés dans S3 (`artifacts/`).
 - La **base** est une instance RDS PostgreSQL 16 privée, chiffrée, mono-AZ (choix de budget), avec sauvegardes sur 7 jours. Seules les instances applicatives atteignent le port 5432. Au premier démarrage d'une nouvelle infrastructure, la **copie de départ** `seed/gallery.sql` est restaurée automatiquement : `terraform apply` suffit pour retrouver l'application avec ses données.
-- **S3** : deux buckets privés, créés par `bootstrap.sh` et jamais détruits. L'un garde l'état Terraform, l'autre les paquets de l'application, la copie de départ de la base et les **images envoyées par les artistes** (servies par l'API, le bucket reste privé).
+- **S3** : deux buckets privés, créés par `bootstrap.sh` et jamais détruits. L'un garde l'état Terraform (versionné, avec verrouillage natif S3), l'autre les paquets de l'application, la copie de départ de la base et les **images envoyées par les artistes** (servies par l'API, le bucket reste privé).
 - Les **secrets** (mot de passe de la base, clé JWT, mot de passe administrateur) sont générés par Terraform et stockés dans SSM Parameter Store, lus au démarrage grâce au rôle de l'instance. Aucun secret dans le code, dans `user_data` ni dans Git.
 - L'**administration** passe par un bastion SSH limité à l'adresse IP de l'administrateur, ou par Session Manager.
-- L'**infrastructure** est créée et détruite uniquement avec Terraform (41 ressources, environ 11 minutes et demie), jamais à la main dans la console AWS.
+- Le **nom de domaine** (`gallery.<votre-domaine>`, chaque membre de l'équipe utilise le sien) vient d'une zone Route 53 et d'un certificat ACM créés une seule fois à la main : Terraform les retrouve par recherche et ajoute seulement l'écouteur HTTPS et l'enregistrement alias, détruit avec la pile. Un déploiement sans la variable `enable_https` reste en HTTP, sur l'adresse du load balancer.
+- La **supervision** (module `monitoring`) comprend un tableau de bord, quatre groupes de journaux (démarrage, accès nginx, erreurs nginx, application), trois alarmes (hôtes non sains, erreurs 5xx, CPU de RDS) et des notifications par e-mail via SNS. Après chaque `apply`, confirmez l'e-mail d'abonnement envoyé par AWS à l'adresse `alarm_email`.
+- L'**infrastructure** est créée et détruite uniquement avec Terraform (52 ressources, 54 avec HTTPS), jamais à la main dans la console AWS. Reconstruction complète mesurée : **14 min 17 s** avec HTTPS, en mode réel (artefacts et copie de départ depuis S3) ; la base RDS (environ 9 minutes) en est le chemin critique.
 
 Réseau, sécurité, déploiement, coûts et tests sont détaillés dans [`infra/README.md`](infra/README.md#architecture).
 
 | Choix ou limite actuelle | Raison |
 |---|---|
 | Site servi par nginx sur les instances, pas par CloudFront | Simple, une seule origine, dans la liste de services du cahier des charges |
-| HTTP uniquement | Pas de nom de domaine, donc pas de certificat dans le laboratoire |
+| HTTPS facultatif (`enable_https`) | La zone Route 53 et le certificat ACM sont créés une seule fois à la main : sans eux, le plan échoue avant de créer quoi que ce soit |
 | Un seul NAT Gateway, base mono-AZ | Budget de 50 USD (le NAT ou le Multi-AZ doublerait une ligne importante) |
 | Données créées sur AWS perdues à la destruction | RDS est supprimée : sauvegardez la base comme nouvelle copie de départ avant, voir [`infra/RDS.md`](infra/RDS.md) |
-| État Terraform local, pas encore dans S3 | Migration prévue |
+| État Terraform dans S3 (versionné, verrouillage natif) | Une copie locale horodatée est faite après chaque `apply` (`state-backups/`) |
 
 ## Fonctionnalités
 
@@ -154,7 +163,7 @@ Les règles de la messagerie sont dans le [README du backend](backend/README.md#
 | Frontend | Next.js 15 (App Router, export statique), React 19, TypeScript, CSS natif | [frontend/](frontend/README.md#stack) |
 | Backend | NestJS 10, TypeORM, Passport JWT, class-validator, Multer, Stripe SDK | [backend/](backend/README.md#stack) |
 | Base de données | PostgreSQL 16 (Docker en local, Amazon RDS en production) | [backend/](backend/README.md#modèle-de-données) |
-| Infrastructure | Terraform (VPC, ALB, Auto Scaling Group, RDS, S3, SSM), AWS Academy Learner Lab (`us-east-1`), scripts boto3 à venir | [infra/](infra/README.md) |
+| Infrastructure | Terraform (VPC, ALB, Auto Scaling Group, RDS, S3, SSM, ACM, Route 53, CloudWatch, SNS), AWS Academy Learner Lab (`us-east-1`), scripts boto3 à venir | [infra/](infra/README.md) |
 | Outillage | npm, concurrently, Docker Compose, Adminer, Python 3 (seed) | |
 
 ## Structure du dépôt
@@ -210,6 +219,20 @@ Ouvrez le site via `localhost` : une autre adresse est refusée par la politique
 
 Configuration détaillée : [frontend](frontend/README.md#configuration) et [backend](backend/README.md#configuration).
 
+### Déployer sur AWS
+
+Prérequis : Terraform 1.10 ou plus, AWS CLI, Git Bash (sous Windows) et des identifiants AWS Academy Learner Lab actifs. Le détail complet est dans [`infra/README.md`](infra/README.md#usage).
+
+```bash
+cd infra
+bash bootstrap/bootstrap.sh <suffixe>          # une fois : buckets S3 persistants
+terraform init -backend-config=backend.hcl     # une fois par dossier de travail
+bash apply.sh                                  # plan, validation, déploiement (environ 14 minutes)
+./destroy.sh                                   # en fin de session
+```
+
+`terraform.tfvars` (non commité) contient au minimum `unique_suffix` et `alarm_email`. Pour le HTTPS, ajoutez `enable_https = true`, `domain_name = "<votre-domaine>"` et `app_subdomain = "gallery"`, après la mise en place unique de la zone Route 53 et du certificat décrite dans [infra/README.md](infra/README.md#https-and-custom-domain). Sous Windows, lancez les scripts `.sh` dans **Git Bash**, pas dans PowerShell.
+
 ## Scripts
 
 | Commande (racine) | Action |
@@ -250,7 +273,7 @@ Vue globale. Le détail de chaque partie est dans son README.
 **Frontend** ([détail](frontend/README.md#feuille-de-route))
 - [x] Catalogue, espaces par rôle, paiement, messagerie, interface responsive
 - [x] Déploiement sur AWS : export statique servi par nginx derrière l'ALB
-- [ ] Messagerie en temps réel, pagination, tests
+- [x] Messagerie en temps réel, pagination, tests
 
 **Backend** ([détail](backend/README.md#feuille-de-route))
 - [x] Authentification JWT, trois rôles, œuvres, commandes, paiement (démonstration et Stripe test), messagerie, administration, seed
@@ -261,4 +284,6 @@ Vue globale. Le détail de chaque partie est dans son README.
 - [x] VPC, sous-réseaux multi-AZ, groupes de sécurité, NAT, bastion, premier backend, script de destruction
 - [x] ALB, Auto Scaling Group (2 zones), RDS PostgreSQL avec sauvegardes, buckets S3 persistants, secrets dans SSM Parameter Store
 - [x] Copie de départ de la base restaurée automatiquement, images envoyées dans S3
-- [ ] CloudWatch, état Terraform distant, HTTPS, test de charge k6, scripts boto3
+- [x] État Terraform distant dans S3, HTTPS avec certificat ACM et enregistrement Route 53
+- [x] CloudWatch : tableau de bord, journaux, alarmes et notifications par e-mail
+- [ ] Test de charge k6, preuves de résilience et de mise à jour progressive, scripts boto3

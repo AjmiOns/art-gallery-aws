@@ -19,6 +19,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+
+
 # The persistent data bucket is created by bootstrap/bootstrap.sh and is never destroyed.
 # This lookup fails at plan time with a clear error if bootstrap.sh was not run
 # (or if unique_suffix differs from the one used there).
