@@ -4,7 +4,7 @@
 
 ## HTTPS and custom domain
 
-Each team member uses **their own domain**, so the name `<your-domain>` below stands for yours (for example `example.com`): replace it everywhere, in the commands and in `terraform.tfvars`. The site is served at `https://gallery.<your-domain>` when `enable_https = true` (default `false`: HTTP only, same as before). Port 80 answers with a permanent redirect (301) to the HTTPS address. TLS ends at the ALB, and the traffic between the ALB and the instances stays HTTP inside the VPC.
+Each team member uses **their own domain**, so the name `<your-domain>` below stands for yours (for example `example.com`): replace it everywhere, in the commands and in `terraform.tfvars`. The site is served at `https://gallery.<your-domain>` when `enable_https = true` (default `false`: HTTP only).
 
 ### One-time setup (outside Terraform)
 
@@ -65,14 +65,11 @@ app_subdomain = "gallery"
 
 Variables: `domain_name` **must be your own domain** (the default `viewmyart.me` is only an example) and `app_subdomain` (default `gallery`).
 
-With `enable_https = true`, Terraform:
+With `enable_https = true`, Terraform also:
 
 - looks up the Route 53 zone and the **ISSUED** certificate (`plan` fails if the certificate is not issued, so nothing half-built is created),
-- adds the HTTPS listener on :443 (policy `ELBSecurityPolicy-TLS13-1-2-2021-06`) and turns the :80 listener into a 301 redirect,
-- creates the alias record `gallery.<your-domain>` to the ALB, destroyed with the stack,
+- uses the TLS policy `ELBSecurityPolicy-TLS13-1-2-2021-06` on the HTTPS listener,
 - gives the backend `https://gallery.<your-domain>` as `FRONTEND_URL` and `PUBLIC_API_URL`.
-
-Without the variable, the plan is unchanged: the only new resources with it on are the HTTPS listener and the alias record (52 become 54).
 
 ### Verify
 
@@ -82,12 +79,10 @@ curl -s https://gallery.<your-domain>/api/health            # expected: the heal
 curl -sI https://gallery.<your-domain> | head -3            # expected: HTTP/2 200
 ```
 
-Result on 15 Nov 2026: the HTTP request is redirected with a 301 by the ALB, HTTPS answers `HTTP/2 200` and the health endpoint is healthy. `terraform apply` created 54 resources in 14 min 17 s.
-
-> **[ADD SCREENSHOT]** `v2-13-https.png`: browser padlock on `gallery.<your-domain>` and the `curl` redirect
+Result on 15 Nov 2026: the HTTP request is redirected with a 301 by the ALB, HTTPS answers `HTTP/2 200` and the health endpoint is healthy.
 
 ![HTTPS with the custom domain](../images/screenshots/v2-13-https.png)
 
 ### After the project
 
-`./destroy.sh` keeps the zone and the certificate. When the course is over, remove them (the zone costs about 0.50 USD per month, the certificate is free): delete the validation record and the other records in the zone, then `aws route53 delete-hosted-zone --id <ZONE_ID>` and `aws acm delete-certificate --region us-east-1 --certificate-arn <CERTIFICATE_ARN>`.
+`./destroy.sh` keeps the zone and the certificate. When the course is over, delete the validation record and the other records in the zone, then `aws route53 delete-hosted-zone --id <ZONE_ID>` and `aws acm delete-certificate --region us-east-1 --certificate-arn <CERTIFICATE_ARN>`.

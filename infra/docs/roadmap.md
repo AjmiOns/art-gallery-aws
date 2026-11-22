@@ -23,7 +23,7 @@
 - [ ] One-command rebuild script (`rebuild.sh`: bootstrap, apply, health check)
 - [x] Resilience demo evidence ([T7](t7.md))
 - [x] Rolling update demo ([T8](t8.md))
-- [ ] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
+- [x] Snapshot and restore demo (T9), snapshot step in `destroy.sh`
 - [x] S3 remote state with bucket versioning, native locking and local backups
 - [x] CloudWatch dashboard and metric alarms deployed
 - [x] SNS e-mail notifications configured and tested (an alarm e-mail was received)

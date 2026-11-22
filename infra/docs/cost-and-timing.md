@@ -23,17 +23,21 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 
 ### Measured: full rebuild in real mode with HTTPS (54 resources)
 
-`time ./apply.sh` after a full destroy, on 15 Nov 2026: **14 min 17 s** (real mode, artifacts and seed from S3, HTTPS on). This includes the precheck and the local state backup done by `apply.sh`. The margin to the 15-minute target (L1) is 43 seconds, so RDS creation speed decides the result: measure again during the demonstration.
+- **15 Nov 2026**, `time ./apply.sh` after a full destroy: **14 min 17 s** (real mode, artifacts and seed from S3, HTTPS on). This includes the precheck and the local state backup done by `apply.sh`.
+- **22 Nov 2026**, `./rebuild.sh --yes` after a full destroy: **13 min 23 s** in total (checks, buckets, artifacts and seed check, `terraform apply` 12 min 15 s, health check `{"status":"ok"}`). The duration comes from `docs/journal-destructions.md`.
+
+The margin to the 15-minute target (L1) is 1 min 37 s on the latest run, but RDS creation speed decides the result: measure again during the demonstration.
 
 ### Measurements to complete
 
 | Measurement | Command | Result |
 |---|---|---|
-| Full apply, real mode (artifacts in S3, HTTPS on) | `time ./apply.sh` | 14 min 17 s |
-| Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s |
+| Full rebuild, one command (artifacts in S3, HTTPS on) | `./rebuild.sh --yes` | 13 min 23 s (22 Nov) |
+| Of which `terraform apply` | `time ./apply.sh` | 12 min 15 s (22 Nov), 14 min 17 s (15 Nov) |
+| Destroy and leftover check | `time ./destroy.sh` | ___ min ___ s (see the journal) |
 | Replacement of a killed instance (until `healthy`) | see [T7](t7.md) | approximately 53 s (`20:58:14` to `20:59:07`) |
 | Rolling update to `v2` | see [T8](t8.md) | ___ min |
-| Rebuild target (L1) | 15 minutes or less | Met: 14 min 17 s in real mode (11.5 min in fallback mode) |
+| Rebuild target (L1) | 15 minutes or less | Met: 13 min 23 s in real mode (11.5 min in fallback mode) |
 
 > **[ADD SCREENSHOT]** `v2-08-timing.png`: timing of apply and destroy
 
@@ -58,7 +62,7 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 | VPC, subnets, route tables, security groups, S3 gateway endpoint, SSM standard parameters | | free | 0 |
 | **Total** | | | **about 0.15 USD/h** |
 
-> Not in the hourly total: the Route 53 hosted zone (about 0.50 USD per month, kept between sessions). The ACM public certificate and the ALB HTTPS listener add no hourly cost.
+> Not in the hourly total: the Route 53 hosted zone (0.50 USD when created, then 0.50 USD per month, kept between sessions). The ACM public certificate and the ALB HTTPS listener add no hourly cost.
 
 ### What it means for the budget (50 USD)
 
@@ -76,6 +80,7 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 | Item | Cost |
 |---|---|
 | 2 S3 buckets (a few MB of artifacts, small state file) | well under 0.01 USD per month (about 0.023 USD/GB-month) |
+| Route 53 hosted zone | **0.50 USD charged when it is created**, then 0.50 USD for every month it exists (it is not destroyed by `./destroy.sh`). Not covered by the Learner Lab hourly cost table above |
 | Manual RDS snapshot (if kept) | cents per month (billed on used size, about 0.095 USD/GB-month) |
 | ECR (not used) | would be about 0.10 USD/GB-month |
 
@@ -88,7 +93,8 @@ The ASG depends on the RDS endpoint (the boot script needs the DB host), which i
 ### Check what was actually spent
 
 ```bash
-# Often denied in the Learner Lab: if so, read the credit counter in the AWS Academy panel instead
+# Cost Explorer answers in the Learner Lab, but credits cancel the usage (net cost about 0).
+# The credit counter in the AWS Academy panel is the official number: destroy.sh asks for it and logs it in compte-aws.md.
 aws ce get-cost-and-usage --time-period Start=2026-11-01,End=2026-11-09 \
   --granularity DAILY --metrics UnblendedCost --query 'ResultsByTime[].[TimePeriod.Start,Total.UnblendedCost.Amount]' --output table
 ```

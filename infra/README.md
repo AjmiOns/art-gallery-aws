@@ -1,11 +1,3 @@
-<!--
-TODO before submission (delete this block when done):
-1. Every [ADD SCREENSHOT] marker (now in docs/*.md) names the file to add in images/screenshots/. The other screenshots are listed in EVIDENCE.md.
-2. Blur the admin IP, the AWS account ID and any password in each screenshot. Never screenshot `--with-decryption` output.
-3. Fill every "___" in docs/cost-and-timing.md and docs/decisions.md (destroy time, artifact sizes, rolling update time).
-4. HTTPS: add images/screenshots/v2-13-https.png (padlock and the `curl -sI http://...` redirect).
--->
-
 # Online Art Gallery - AWS Infrastructure (Terraform)
 
 ![Terraform](https://img.shields.io/badge/Terraform-v3%20applied%20and%20verified-7B42BC?logo=terraform&logoColor=white)
@@ -15,7 +7,7 @@ TODO before submission (delete this block when done):
 Infrastructure as Code for the **Online Art Gallery** ([project overview](../README.md)), deployed on **AWS Academy Learner Lab** (`us-east-1`). Architecture **v3** has been applied end to end: network, ALB with HTTPS, Auto Scaling Group, RDS, secrets, remote state and monitoring.
 
 - This README covers **infrastructure only**. The application is in [`frontend/`](../frontend/README.md) and [`backend/`](../backend/README.md).
-- `terraform apply` is the only command needed to get the application back **with its data**: the first booting instance restores `seed/gallery.sql` from S3 ([RDS.md](RDS.md)). Uploaded images go to S3 ([S3.md](S3.md)).
+- `./rebuild.sh` is the only command needed to get the application back **with its data** after a destroy: it checks the buckets, the artifacts and the seed, runs `terraform apply` and waits for the health check. The first booting instance restores `seed/gallery.sql` from S3 ([RDS.md](RDS.md)). Uploaded images go to S3 ([S3.md](S3.md)).
 - Rule of the course: nothing is built by hand in the console, which is used only to look. Three documented exceptions are created once with the AWS CLI and kept between sessions: the two S3 buckets, the Route 53 hosted zone and the ACM certificate.
 - Detailed procedures, decisions, costs and evidence are in [`docs/`](#more-documentation). Every command has its screenshot in [EVIDENCE.md](EVIDENCE.md).
 
@@ -29,6 +21,7 @@ Infrastructure as Code for the **Online Art Gallery** ([project overview](../REA
 |---|---|
 | Region / account | `us-east-1`, AWS Academy Learner Lab (`LabRole`, `LabInstanceProfile`) |
 | Resources | **52** (54 with `enable_https = true`). `terraform state list` shows 56 (60 with HTTPS) because it also lists read-only data sources |
+| One-command rebuild | `./rebuild.sh` (buckets, artifacts, seed check, apply, health check). Every run is logged in `docs/journal-destructions.md` |
 | Full rebuild (measured) | **14 min 17 s** in real mode with HTTPS (`./apply.sh`). RDS (about 9 min) is the critical path |
 | Running cost | about **0.15 USD per hour**, so destroy after every session ([details](docs/cost-and-timing.md)) |
 | Deployment method | Versioned `tar.gz` artifacts in S3, installed at boot by `user_data` (no Docker, no ECR) ([why](docs/decisions.md)) |
@@ -75,7 +68,7 @@ Each tier trusts only the tier before it. Rules reference security groups, not I
 
 | Lives | Resources | Created by |
 |---|---|---|
-| **Persistent** | S3 state bucket (versioned, remote state and locking) and S3 data bucket (`artifacts/`, `artworks/`, `seed/`) | `bootstrap/bootstrap.sh` (AWS CLI) |
+| **Persistent** | S3 state bucket (versioned, remote state and locking) and S3 data bucket (`artifacts/`, `artworks/`, `seed/`) | `bootstrap/bootstrap.sh` (AWS CLI), run by `rebuild.sh` |
 | **Persistent** | Route 53 hosted zone and ACM certificate (`ISSUED`, with its DNS validation CNAME, which must stay in the zone so the certificate can renew) | By hand, once (CLI), see [docs/https.md](docs/https.md) |
 | **Destroyed each session** | Everything else, including the Route 53 alias record `gallery` to the ALB | Terraform, `./destroy.sh` |
 
@@ -99,11 +92,14 @@ After **every** apply, AWS sends a new SNS confirmation e-mail to `alarm_email`:
 ```
 infra/
 |-- versions.tf, variables.tf, main.tf, outputs.tf, terraform.tfvars.example
+|-- rebuild.sh                  one-command rebuild: buckets, artifacts, seed check, apply, health check
 |-- apply.sh, destroy.sh        apply with state backup / destroy with leftover check
 |-- backend.hcl.example         S3 backend settings
 |-- bootstrap/                  bootstrap.sh: the 2 persistent S3 buckets
+|-- scripts/                    precheck.sh, backup-state.sh, log-helpers.sh (journal and credit log)
 |-- modules/                    network, security, compute, secrets, alb, rds, monitoring, asg
-|-- docs/                       procedures, decisions, tests (t1..t13), cost, troubleshooting
+|-- docs/                       procedures, decisions, tests (t1..t13), cost, troubleshooting,
+|                               journal-destructions.md, compte-aws.md
 |-- images/                     architecture diagrams and screenshots
 `-- RDS.md, S3.md, EVIDENCE.md
 ```
@@ -112,13 +108,27 @@ infra/
 
 All commands run from `infra/`. Full guide with prerequisites and screenshots: [docs/usage.md](docs/usage.md).
 
+### Fast path: one command
+
 ```bash
 # 1. Credentials (every lab session): AWS Academy -> Start Lab -> AWS Details -> paste into ~/.aws/credentials
 aws sts get-caller-identity
 
-# 2. Configure: set unique_suffix (same as bootstrap) and alarm_email; for HTTPS also enable_https and domain_name
+# 2. Configure once: set unique_suffix and alarm_email (for HTTPS also enable_https and domain_name)
 cp terraform.tfvars.example terraform.tfvars
 
+# 3. Rebuild everything from zero
+time ./rebuild.sh --yes                   # buckets, artifacts (if missing), seed check, apply, health check
+
+# 4. Destroy (mandatory at the end of every session)
+time ./destroy.sh                         # must end with: OK: nothing billable left.
+```
+
+`rebuild.sh` options: `--force-artifacts` rebuilds and re-uploads the backend and frontend even if they are already in S3, `--refresh-seed` dumps the local Docker database and overwrites `seed/gallery.sql`, `--yes` skips the approval question. Every run adds a line to `docs/journal-destructions.md`. `destroy.sh` adds its own line and asks for the remaining Learner Lab credit, which goes to `docs/compte-aws.md`.
+
+### Step by step (what `rebuild.sh` automates)
+
+```bash
 # 3. Bootstrap (once)
 cd bootstrap && ./bootstrap.sh <unique_suffix> && cd ..
 cp backend.hcl.example backend.hcl        # bucket = art-gallery-tfstate-<suffix>
@@ -131,9 +141,6 @@ aws s3 cp /tmp/frontend-v1.tar.gz s3://art-gallery-data-<suffix>/artifacts/
 terraform init -backend-config=backend.hcl
 time ./apply.sh                           # detects your IP, asks for approval, backs up the state
 curl "$(terraform output -raw health_url)"
-
-# 6. Destroy (mandatory at the end of every session)
-time ./destroy.sh                         # must end with: OK: nothing billable left.
 ```
 
 For HTTPS, do the one-time Route 53 and ACM setup first: [docs/https.md](docs/https.md). If your public IP changes, run `./apply.sh` again to update the bastion rule.
@@ -178,7 +185,7 @@ Full table: [docs/known-limits.md](docs/known-limits.md).
 - **No instance refresh.** The lab denies `autoscaling:StartInstanceRefresh`, so rolling updates replace instances by hand ([T8](docs/t8.md)).
 - **`npm ci` at boot** depends on the npm registry through the NAT.
 
-Still to do: k6 load test (T11), `rebuild.sh` one-command rebuild, boto3 scripts, optional ECR upgrade ([roadmap](docs/roadmap.md)).
+Still to do: k6 load test (T11), boto3 scripts, optional ECR upgrade ([roadmap](docs/roadmap.md)).
 
 ## Security notes
 
@@ -187,6 +194,7 @@ Still to do: k6 load test (T11), `rebuild.sh` one-command rebuild, boto3 scripts
 - The DB password, JWT secret and admin password are generated by Terraform, stored in SSM and never in Git or `user_data`. Read the admin password with `terraform output read_admin_password`.
 - Passwords are stored as bcrypt hashes and card numbers are never stored ([T12](RDS.md#5-verification-passwords-and-cards)).
 - `seed/gallery.sql` contains e-mails and password hashes: keep it in the private bucket only.
+- `docs/compte-aws.md` and `docs/journal-destructions.md` hold only dates, durations and amounts: never write account IDs, keys or session tokens in them.
 - Blur the admin IP, account ID, public IPs and any secret in every screenshot.
 
 ## More documentation
@@ -203,6 +211,8 @@ Still to do: k6 load test (T11), `rebuild.sh` one-command rebuild, boto3 scripts
 | Tests T1 to T13 | [docs/tests.md](docs/tests.md) and `docs/t*.md` |
 | Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
 | Known limits and roadmap | [docs/known-limits.md](docs/known-limits.md), [docs/roadmap.md](docs/roadmap.md) |
+| Destroy and rebuild journal (automatic) | [docs/journal-destructions.md](docs/journal-destructions.md) |
+| Carrier account, switch order and credit log | [docs/compte-aws.md](docs/compte-aws.md) |
 | Database seed, queries, backup | [RDS.md](RDS.md) |
 | S3 buckets and image uploads | [S3.md](S3.md) |
 | Screenshot evidence | [EVIDENCE.md](EVIDENCE.md) |

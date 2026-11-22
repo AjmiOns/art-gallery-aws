@@ -39,7 +39,7 @@ aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=art-
 
 If this call is denied in the lab, skip it: the blocks below cover each resource type. (Some resources, such as route table associations, are not taggable, so the count is lower than 41.)
 
-*Screenshot: [tagged resource inventory](../EVIDENCE.md#v1-inventory-of-everything-tagged-for-the-project)*
+*Screenshot: [tagged resource inventory](../images/inventory-of-everything-tagged-for-the-project.png)*
 
 ### V2. Persistent buckets and artifacts
 
@@ -190,7 +190,7 @@ aws ssm describe-parameters --parameter-filters Key=Name,Option=BeginsWith,Value
 
 Expected: 3 parameters of type `SecureString`. **Do not** add `get-parameter --with-decryption` to a screenshot.
 
-*Screenshot: [SSM parameters](../EVIDENCE.md#v11-secrets-names-and-type-only-never-the-values)*
+![SSM parameters](../images/v11-secrets.png)
 
 ### Leftover check
 
