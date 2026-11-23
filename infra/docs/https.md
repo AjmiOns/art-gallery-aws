@@ -63,7 +63,7 @@ domain_name   = "<your-domain>"
 app_subdomain = "gallery"
 ```
 
-Variables: `domain_name` **must be your own domain** (the default `viewmyart.me` is only an example) and `app_subdomain` (default `gallery`).
+Variables: `domain_name` is **your own domain** (no default, required when `enable_https = true`) and `app_subdomain` (default `gallery`).
 
 With `enable_https = true`, Terraform also:
 
