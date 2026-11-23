@@ -39,3 +39,4 @@ dist-artifacts/
 gallery.sql
 *.sql
 *.dump
+infra/images/.$*.bkp

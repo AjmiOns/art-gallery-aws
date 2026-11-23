@@ -2,11 +2,9 @@ admin_cidr    = "YOUR.PUBLIC.IP/32"
 unique_suffix = "CHANGE-ME-same-as-bootstrap"
 alarm_email   = "you@example.com"
 
-# Optional: HTTPS on your domain (needs the one-time Route 53 + ACM setup, see README)
-# enable_https = true
-
 # Optional: HTTPS on YOUR OWN domain (needs the one-time Route 53 + ACM setup, see README).
 # Each team member uses their own domain: replace example.com.
 # enable_https  = true
 # domain_name   = "example.com"
 # app_subdomain = "gallery"      # the site is served at https://gallery.example.com
+

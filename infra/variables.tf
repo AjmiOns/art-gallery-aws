@@ -103,9 +103,14 @@ variable "enable_https" {
 }
 
 variable "domain_name" {
-  description = "Domain whose public hosted zone already exists in Route 53"
+  description = "Your own domain, whose public hosted zone already exists in Route 53 (required when enable_https = true)"
   type        = string
-  default     = "viewmyart.me"
+  default     = ""
+
+  validation {
+    condition     = !var.enable_https || var.domain_name != ""
+    error_message = "enable_https = true needs domain_name: set your own domain in terraform.tfvars."
+  }
 }
 
 variable "app_subdomain" {
